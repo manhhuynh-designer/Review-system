@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Projects collection
+    match /projects/{projectId} {
+      // Public read (for review links)
+      allow read: if true;
+
+      // Only authenticated admins can write
+      allow create, update, delete: if isAuthenticated();
+
+      // Files subcollection
+      match /files/{fileId} {
+        allow read: if true;
+        allow create, update, delete: if isAuthenticated();
+      }
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        // Anyone can read comments
+        allow read: if true;
+
+        // Anyone can create comments (for public reviewers)
+        allow create: if true;
+
+        // Only authenticated admins can update/delete
+        allow update, delete: if isAuthenticated();
+      }
+    }
+  }
+}

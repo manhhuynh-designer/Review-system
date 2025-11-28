@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+
+    function isModel() {
+      return request.resource.contentType == 'model/gltf-binary' ||
+             request.resource.contentType == 'model/gltf+json';
+    }
+
+    function isValidFileType() {
+      return isImage() || isVideo() || isModel();
+    }
+
+    function isUnder100MB() {
+      return request.resource.size < 100 * 1024 * 1024;
+    }
+
+    // Public read; only authenticated users can write to projects bucket
+    match /projects/{projectId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && isValidFileType() && isUnder100MB();
+    }
+  }
+}
