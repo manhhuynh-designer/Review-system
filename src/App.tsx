@@ -90,6 +90,14 @@ const router = createBrowserRouter([
   },
   {
     path: '/',
+    loader: () => {
+      // Check if in production environment
+      if (import.meta.env.PROD) {
+        window.location.href = 'http://manhhuynh.work'
+        return null
+      }
+      return null
+    },
     element: <Navigate to="/login" replace />,
   },
 ])

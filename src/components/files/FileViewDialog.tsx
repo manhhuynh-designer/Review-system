@@ -102,7 +102,7 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
           <img
             src={effectiveUrl}
             alt={file.name}
-            className="w-full h-auto max-h-[70vh] object-contain mx-auto"
+            className="w-full h-auto max-h-[55vh] xl:max-h-[50vh] 2xl:max-h-[45vh] object-contain mx-auto"
           />
         </div>
       )
@@ -115,7 +115,7 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
             ref={videoRef}
             src={effectiveUrl}
             controls
-            className="w-full h-auto max-h-[70vh] mx-auto"
+            className="w-full h-auto max-h-[55vh] xl:max-h-[50vh] 2xl:max-h-[45vh] mx-auto"
             onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           />
         </div>
@@ -256,8 +256,8 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
                   <AddComment
                     userName={currentUserName}
                     onUserNameChange={handleUserNameChange}
-                    onSubmit={(userName, content, timestamp) => 
-                      addComment(projectId, file.id, file.currentVersion, userName, content, timestamp)
+                    onSubmit={(userName, content, timestamp, parentId, annotationData) => 
+                      addComment(projectId, file.id, file.currentVersion, userName, content, timestamp, parentId, annotationData)
                     }
                     currentTimestamp={file.type === 'video' ? currentTime : undefined}
                     showTimestamp={file.type === 'video'}

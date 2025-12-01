@@ -22,13 +22,13 @@ interface FilesListProps {
 
 const getFileTypeLabel = (type: string) => {
   if (type === 'image') return 'Hình ảnh'
-  if (type === 'video') return 'Video' 
+  if (type === 'video') return 'Video'
   if (type === 'model') return 'Mô hình 3D'
   return 'Tệp tin'
 }
 
 export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', searchTerm = '' }: FilesListProps) {
-  const { files, switchVersion, uploading, deleteFile, deleting, uploadFile, setSequenceViewMode, selectedFile: storeSelectedFile, selectFile: storeSelectFile } = useFileStore()
+  const { files, switchVersion, uploading, deleteFile, deleting, uploadFile, setSequenceViewMode, updateFrameCaption, selectedFile: storeSelectedFile, selectFile: storeSelectFile } = useFileStore()
   const { comments, subscribeToComments, addComment, toggleResolve, cleanup: cleanupComments } = useCommentStore()
   const { user } = useAuthStore()
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({})
@@ -46,16 +46,21 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
   const ensureDownloadUrl = async (fileId: string, version: number, storagePath: string, currentUrl?: string) => {
     const key = getKey(fileId, version)
     if (resolvedUrls[key]) return resolvedUrls[key]
-    
+
     const needsFix = currentUrl?.includes('firebasestorage.app')
     if (!needsFix) return currentUrl
-    
+
     try {
       const url = await getDownloadURL(ref(storage, storagePath))
       setResolvedUrls(prev => ({ ...prev, [key]: url }))
       return url
-    } catch (e) {
-      console.error('❌ Failed to fix URL:', e)
+    } catch (e: any) {
+      // Only log warnings for actual errors, ignore 404s as we fall back to existing URL
+      if (e.code === 'storage/object-not-found') {
+        // console.warn(`File not found in storage: ${storagePath}. Using existing URL.`)
+      } else {
+        console.warn('Failed to refresh URL:', e)
+      }
       return currentUrl
     }
   }
@@ -66,10 +71,15 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
       const tasks: Promise<any>[] = []
       for (const f of files || []) {
         const current = f.versions.find(v => v.version === f.currentVersion) || f.versions[0]
-        if (!current?.url) continue
+        if (!current?.url || !current?.metadata?.name) continue
+
+        // Skip if URL already has a token (likely valid)
+        if (current.url.includes('token=')) continue
+
         const key = getKey(f.id, current.version)
         if (resolvedUrls[key]) continue
         if (!current.url.includes('firebasestorage.app')) continue
+
         const storagePath = `projects/${projectId}/${f.id}/v${current.version}/${current.metadata.name}`
         tasks.push(ensureDownloadUrl(f.id, current.version, storagePath, current.url))
       }
@@ -133,9 +143,9 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
     localStorage.setItem('reviewUserName', name)
   }
 
-  const handleAddComment = async (userName: string, content: string, timestamp?: number, parentCommentId?: string) => {
+  const handleAddComment = async (userName: string, content: string, timestamp?: number, parentCommentId?: string, annotationData?: string | null, attachments?: File[]) => {
     if (selectedFile) {
-      await addComment(projectId, selectedFile.id, selectedFile.currentVersion, userName, content, timestamp, parentCommentId)
+      await addComment(projectId, selectedFile.id, selectedFile.currentVersion, userName, content, timestamp, parentCommentId, annotationData, attachments)
     }
   }
 
@@ -177,20 +187,16 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
     }
   }
 
-  const handleSequenceViewModeChange = async (fileId: string, mode: 'video' | 'carousel') => {
-    if (user) {
-      try {
-        await setSequenceViewMode(projectId, fileId, mode)
-      } catch (error) {
-        // Error is handled in store
-      }
-    }
+  const handleSequenceViewModeChange = async (fileId: string, mode: 'video' | 'carousel' | 'grid') => {
+    await setSequenceViewMode(projectId, fileId, mode)
   }
 
-  // Filter and sort files based on search and sort criteria
+  const handleCaptionChange = async (fileId: string, version: number, frame: number, caption: string) => {
+    await updateFrameCaption(projectId, fileId, version, frame, caption)
+  }
   const filteredAndSortedFiles = useMemo(() => {
     if (!files) return []
-    
+
     // First filter by search term
     let filtered = files
     if (searchTerm.trim()) {
@@ -200,15 +206,15 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
         const matchesType = getFileTypeLabel(file.type).toLowerCase().includes(term)
         const currentVersion = file.versions.find(v => v.version === file.currentVersion) || file.versions[0]
         const matchesFileName = currentVersion?.metadata.name.toLowerCase().includes(term)
-        
+
         return matchesName || matchesType || matchesFileName
       })
     }
-    
+
     // Then sort the filtered results
     const sorted = [...filtered].sort((a, b) => {
       let compareValue = 0
-      
+
       switch (sortBy) {
         case 'name':
           compareValue = a.name.localeCompare(b.name)
@@ -230,10 +236,10 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
         default:
           return 0
       }
-      
+
       return sortDirection === 'asc' ? compareValue : -compareValue
     })
-    
+
     return sorted
   }, [files, sortBy, sortDirection, searchTerm])
 
@@ -325,7 +331,9 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
           onUserNameChange={handleUserNameChange}
           onAddComment={handleAddComment}
           onResolveToggle={user ? handleResolveToggle : undefined}
+
           isAdmin={!!user}
+          onCaptionChange={user ? handleCaptionChange : undefined}
         />
       )}
 

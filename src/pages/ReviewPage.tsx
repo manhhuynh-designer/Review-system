@@ -36,6 +36,23 @@ export default function ReviewPage() {
 
   const getKey = (fileId: string, version: number) => `${fileId}-v${version}`
 
+  // Try to fix legacy/bad URLs by extracting the object path from the URL
+  const extractStoragePathFromUrl = (url?: string): string | null => {
+    if (!url) return null
+    // Firebase download URL format: .../o/<ENCODED_PATH>?...
+    const marker = '/o/'
+    const idx = url.indexOf(marker)
+    if (idx === -1) return null
+    const after = url.substring(idx + marker.length)
+    const endIdx = after.indexOf('?')
+    const encodedPath = endIdx === -1 ? after : after.substring(0, endIdx)
+    try {
+      return decodeURIComponent(encodedPath)
+    } catch {
+      return null
+    }
+  }
+
   const ensureDownloadUrl = async (fileId: string, version: number, storagePath: string, currentUrl?: string) => {
     const key = getKey(fileId, version)
     if (resolvedUrls[key]) return resolvedUrls[key]
@@ -44,7 +61,11 @@ export default function ReviewPage() {
     if (!needsFix) return currentUrl
     
     try {
-      const url = await getDownloadURL(ref(storage, storagePath))
+      // Prefer extracting the exact object path from the existing URL (more robust
+      // for sequences or legacy uploads where metadata.name doesn't match).
+      const extractedPath = extractStoragePathFromUrl(currentUrl)
+      const targetPath = extractedPath || storagePath
+      const url = await getDownloadURL(ref(storage, targetPath))
       setResolvedUrls(prev => ({ ...prev, [key]: url }))
       return url
     } catch (e) {
@@ -87,8 +108,9 @@ export default function ReviewPage() {
         const key = getKey(f.id, current.version)
         if (resolvedUrls[key]) continue
         if (!current.url.includes('firebasestorage.app')) continue
-        const storagePath = `projects/${projectId}/${f.id}/v${current.version}/${current.metadata.name}`
-        tasks.push(ensureDownloadUrl(f.id, current.version, storagePath, current.url))
+        // Build a best-effort storagePath as fallback; prefer extracting from URL inside ensureDownloadUrl
+        const fallbackPath = `projects/${projectId}/${f.id}/v${current.version}/${current.metadata.name}`
+        tasks.push(ensureDownloadUrl(f.id, current.version, fallbackPath, current.url))
       }
       if (tasks.length) {
         await Promise.allSettled(tasks)
@@ -140,9 +162,9 @@ export default function ReviewPage() {
     setDialogOpen(true)
   }
 
-  const handleAddComment = async (userName: string, content: string, timestamp?: number, parentCommentId?: string) => {
+  const handleAddComment = async (userName: string, content: string, timestamp?: number, parentCommentId?: string, annotationData?: string | null, attachments?: File[]) => {
     if (selectedFile) {
-      await addComment(projectId!, selectedFile.id, selectedFile.currentVersion, userName, content, timestamp, parentCommentId)
+      await addComment(projectId!, selectedFile.id, selectedFile.currentVersion, userName, content, timestamp, parentCommentId, annotationData, attachments)
     }
   }
 

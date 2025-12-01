@@ -28,13 +28,18 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "firebase": "^12.6.0",
+    "konva": "^10.0.12",
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
+    "react-compare-slider": "^2.1.0",
     "react-dom": "^19.2.0",
     "react-hot-toast": "^2.6.0",
+    "react-konva": "^19.2.1",
     "react-router-dom": "^7.9.6",
     "tailwind-merge": "^3.4.0",
     "three": "^0.181.2",
+    "video.js": "^8.23.4",
+    "videojs-markers": "^1.0.1",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

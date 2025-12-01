@@ -1,11 +1,11 @@
 import { create } from 'zustand'
-import { 
-  collection, 
+import {
+  collection,
   setDoc,
   updateDoc,
   deleteDoc,
-  doc, 
-  onSnapshot, 
+  doc,
+  onSnapshot,
   query,
   orderBy,
   Timestamp,
@@ -28,7 +28,7 @@ interface FileState {
   deleting: boolean
   error: string | null
   unsubscribe: Unsubscribe | null
-  
+
   subscribeToFiles: (projectId: string) => void
   loadFiles: (projectId: string) => void
   uploadFile: (projectId: string, file: File, existingFileId?: string) => Promise<void>
@@ -36,7 +36,8 @@ interface FileState {
   deleteFile: (projectId: string, fileId: string) => Promise<void>
   selectFile: (file: FileType | null) => void
   switchVersion: (fileId: string, version: number) => Promise<void>
-  setSequenceViewMode: (projectId: string, fileId: string, mode: 'video' | 'carousel') => Promise<void>
+  setSequenceViewMode: (projectId: string, fileId: string, mode: 'video' | 'carousel' | 'grid') => Promise<void>
+  updateFrameCaption: (projectId: string, fileId: string, version: number, frameNumber: number, caption: string) => Promise<void>
   cleanup: () => void
 }
 
@@ -60,7 +61,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         projectId,
         ...doc.data()
       })) as FileType[]
-      
+
       set({ files, error: null })
     }, (error) => {
       const errorMessage = 'Lỗi tải file: ' + error.message
@@ -79,11 +80,11 @@ export const useFileStore = create<FileState>((set, get) => ({
   uploadFile: async (projectId: string, file: File, existingFileId?: string) => {
     console.log('🚀 Upload started:', { projectId, fileName: file.name, size: file.size, existingFileId })
     set({ uploading: true, error: null })
-    
+
     try {
       const fileId = existingFileId || generateId()
       console.log('📁 Generated fileId:', fileId)
-      
+
       // Determine file type
       let fileType: 'image' | 'video' | 'model' = 'image'
       if (file.type.startsWith('video/')) fileType = 'video'
@@ -103,7 +104,7 @@ export const useFileStore = create<FileState>((set, get) => ({
       // Upload to Storage
       const storagePath = `projects/${projectId}/${fileId}/v${currentVersion}/${file.name}`
       console.log('☁️ Storage path:', storagePath)
-      
+
       const storageRef = ref(storage, storagePath)
       console.log('⬆️ Starting upload to storage...')
       const snapshot = await uploadBytes(storageRef, file)
@@ -150,7 +151,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         await setDoc(fileRef, newFileData)
         console.log('✅ New file created')
         toast.success(`Đã tải lên ${file.name}`)
-        
+
         // Create notification for new file upload
         const projectDoc = await getDoc(doc(db, 'projects', projectId))
         if (projectDoc.exists()) {
@@ -164,7 +165,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           })
         }
       }
-      
+
       console.log('🎉 Upload process completed successfully!')
     } catch (error: any) {
       console.error('❌ Upload failed:', error)
@@ -173,7 +174,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         message: error.message,
         stack: error.stack
       })
-      
+
       const errorMessage = 'Tải file thất bại: ' + (error.message || 'Lỗi không xác định')
       set({ error: errorMessage })
       toast.error(errorMessage)
@@ -190,14 +191,14 @@ export const useFileStore = create<FileState>((set, get) => ({
   uploadSequence: async (projectId: string, files: File[], name: string, fps: number = 24, existingFileId?: string) => {
     console.log('🎬 Sequence upload started:', { projectId, name, frameCount: files.length, fps, existingFileId })
     set({ uploading: true, error: null })
-    
+
     try {
       const fileId = existingFileId || generateId()
       console.log('📁 Generated fileId:', fileId)
 
       // Sort files by name to ensure correct frame order
       const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name))
-      
+
       // Get current version
       let currentVersion = 1
       if (existingFileId) {
@@ -211,20 +212,20 @@ export const useFileStore = create<FileState>((set, get) => ({
       // Upload all frames to Storage
       const sequenceUrls: string[] = []
       let totalSize = 0
-      
+
       for (let i = 0; i < sortedFiles.length; i++) {
         const file = sortedFiles[i]
         totalSize += file.size
-        
+
         const storagePath = `projects/${projectId}/${fileId}/v${currentVersion}/frames/${String(i).padStart(4, '0')}_${file.name}`
         console.log(`⬆️ Uploading frame ${i + 1}/${sortedFiles.length}: ${storagePath}`)
-        
+
         const storageRef = ref(storage, storagePath)
         const snapshot = await uploadBytes(storageRef, file)
         const url = await getDownloadURL(snapshot.ref)
         sequenceUrls.push(url)
       }
-      
+
       console.log('✅ All frames uploaded, getting URLs...')
 
       // Create version metadata
@@ -270,7 +271,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         await setDoc(fileRef, newFileData)
         console.log('✅ New sequence created')
         toast.success(`Đã tải lên sequence "${name}" với ${sequenceUrls.length} frames`)
-        
+
         // Create notification for new sequence upload
         const projectDoc = await getDoc(doc(db, 'projects', projectId))
         if (projectDoc.exists()) {
@@ -284,7 +285,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           })
         }
       }
-      
+
       console.log('🎉 Sequence upload completed successfully!')
     } catch (error: any) {
       console.error('❌ Sequence upload failed:', error)
@@ -293,7 +294,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         message: error.message,
         stack: error.stack
       })
-      
+
       const errorMessage = 'Tải sequence thất bại: ' + (error.message || 'Lỗi không xác định')
       set({ error: errorMessage })
       toast.error(errorMessage)
@@ -305,7 +306,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   deleteFile: async (projectId: string, fileId: string) => {
     set({ deleting: true, error: null })
-    
+
     try {
       const file = get().files.find(f => f.id === fileId)
       if (!file) {
@@ -345,7 +346,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         where('fileId', '==', fileId)
       )
       const commentsSnapshot = await getDocs(commentsQuery)
-      const deleteCommentPromises = commentsSnapshot.docs.map(doc => 
+      const deleteCommentPromises = commentsSnapshot.docs.map(doc =>
         deleteDoc(doc.ref)
       )
       await Promise.all(deleteCommentPromises)
@@ -381,15 +382,51 @@ export const useFileStore = create<FileState>((set, get) => ({
     }
   },
 
-  setSequenceViewMode: async (projectId: string, fileId: string, mode: 'video' | 'carousel') => {
+  setSequenceViewMode: async (projectId: string, fileId: string, mode: 'video' | 'carousel' | 'grid') => {
     try {
       await updateDoc(doc(db, 'projects', projectId, 'files', fileId), {
         sequenceViewMode: mode
       })
-      toast.success(`Đã đặt chế độ xem: ${mode === 'video' ? 'Video' : 'Carousel'}`)
+      const modeName = mode === 'video' ? 'Video' : mode === 'carousel' ? 'Carousel' : 'Grid'
+      toast.success(`Đã đặt chế độ xem: ${modeName}`)
     } catch (error: any) {
       console.error('Failed to update sequence view mode:', error)
       toast.error('Lỗi cập nhật chế độ xem')
+    }
+  },
+
+  updateFrameCaption: async (projectId: string, fileId: string, version: number, frameNumber: number, caption: string) => {
+    try {
+      const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+      const fileDoc = await getDoc(fileRef)
+
+      if (!fileDoc.exists()) throw new Error('File not found')
+
+      const data = fileDoc.data() as FileType
+      const versions = [...data.versions]
+      const versionIndex = versions.findIndex(v => v.version === version)
+
+      if (versionIndex >= 0) {
+        const currentVersion = versions[versionIndex]
+        const frameCaptions = { ...(currentVersion.frameCaptions || {}) }
+
+        if (caption) {
+          frameCaptions[frameNumber] = caption
+        } else {
+          delete frameCaptions[frameNumber]
+        }
+
+        versions[versionIndex] = {
+          ...currentVersion,
+          frameCaptions
+        }
+
+        await updateDoc(fileRef, { versions })
+        toast.success('Đã lưu chú thích')
+      }
+    } catch (error: any) {
+      console.error('Failed to update frame caption:', error)
+      toast.error('Lỗi lưu chú thích')
     }
   },
 

@@ -87,7 +87,7 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
 
         {/* Comment count badge */}
         {commentCount > 0 && (
-          <div className="absolute top-2 right-2">
+          <div className="absolute bottom-2 right-2">
             <Badge variant="default" className="text-xs backdrop-blur-sm gap-1">
               <MessageSquare className="w-3 h-3" />
               {commentCount}

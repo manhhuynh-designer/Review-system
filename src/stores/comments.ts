@@ -12,7 +12,7 @@ import {
   getDoc
 } from 'firebase/firestore'
 import type { Unsubscribe } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { db, uploadCommentAttachments } from '../lib/firebase'
 import { createNotification } from '../lib/notifications'
 import type { Comment } from '../types'
 import toast from 'react-hot-toast'
@@ -23,8 +23,9 @@ interface CommentState {
   unsubscribe: Unsubscribe | null
   
   subscribeToComments: (projectId: string, fileId?: string) => void
-  addComment: (projectId: string, fileId: string, version: number, userName: string, content: string, timestamp?: number, parentCommentId?: string) => Promise<void>
+  addComment: (projectId: string, fileId: string, version: number, userName: string, content: string, timestamp?: number, parentCommentId?: string, annotationData?: string | null, attachments?: File[]) => Promise<void>
   toggleResolve: (projectId: string, commentId: string, isResolved: boolean) => Promise<void>
+  togglePin: (projectId: string, commentId: string, currentStatus: boolean) => Promise<void>
   cleanup: () => void
 }
 
@@ -34,16 +35,19 @@ export const useCommentStore = create<CommentState>((set, get) => ({
   unsubscribe: null,
 
   subscribeToComments: (projectId: string, fileId?: string) => {
+    // Avoid requiring composite Firestore indexes or causing watch conflicts by
+    // ordering only by createdAt on the server and applying pinned-first
+    // sorting client-side. This is more robust across existing data.
     let q = query(
       collection(db, 'projects', projectId, 'comments'),
-      orderBy('createdAt', 'asc')
+      orderBy('createdAt', 'desc')
     )
 
     if (fileId) {
       q = query(
         collection(db, 'projects', projectId, 'comments'),
         where('fileId', '==', fileId),
-        orderBy('createdAt', 'asc')
+        orderBy('createdAt', 'desc')
       )
     }
 
@@ -53,7 +57,18 @@ export const useCommentStore = create<CommentState>((set, get) => ({
         projectId,
         ...doc.data()
       })) as Comment[]
-      
+
+      // Ensure pinned comments appear first even if previous documents
+      // don't have the `isPinned` field. New comments default to false.
+      comments.sort((a, b) => {
+        const aPinned = (a as any).isPinned ? 1 : 0
+        const bPinned = (b as any).isPinned ? 1 : 0
+        if (aPinned !== bPinned) return bPinned - aPinned
+        const aTime = (a as any).createdAt?.toMillis ? (a as any).createdAt.toMillis() : 0
+        const bTime = (b as any).createdAt?.toMillis ? (b as any).createdAt.toMillis() : 0
+        return bTime - aTime
+      })
+
       set({ comments })
     }, (error) => {
       toast.error('Lỗi tải bình luận: ' + error.message)
@@ -62,10 +77,11 @@ export const useCommentStore = create<CommentState>((set, get) => ({
     set({ unsubscribe })
   },
 
-  addComment: async (projectId: string, fileId: string, version: number, userName: string, content: string, timestamp?: number, parentCommentId?: string) => {
+  addComment: async (projectId: string, fileId: string, version: number, userName: string, content: string, timestamp?: number, parentCommentId?: string, annotationData?: string | null, attachments?: File[]) => {
     set({ loading: true })
     try {
-      await addDoc(collection(db, 'projects', projectId, 'comments'), {
+      // Create comment document first to get ID
+      const commentRef = await addDoc(collection(db, 'projects', projectId, 'comments'), {
         fileId,
         version,
         userName,
@@ -73,8 +89,29 @@ export const useCommentStore = create<CommentState>((set, get) => ({
         timestamp: timestamp ?? null,
         parentCommentId: parentCommentId ?? null,
         isResolved: false,
-        createdAt: Timestamp.now()
+        isPinned: false,
+        annotationData: annotationData ?? null,
+        createdAt: Timestamp.now(),
+        // We'll update with attachments data after upload
+        attachments: null,
+        imageUrls: null
       })
+
+      // Upload attachments if any
+      let uploadedAttachments = null
+      let imageUrls = null
+      if (attachments && attachments.length > 0) {
+        uploadedAttachments = await uploadCommentAttachments(attachments, projectId, commentRef.id)
+        imageUrls = uploadedAttachments
+          .filter(att => att.type === 'image')
+          .map(att => att.url)
+        
+        // Update comment with attachment data
+        await updateDoc(commentRef, {
+          attachments: uploadedAttachments,
+          imageUrls: imageUrls.length > 0 ? imageUrls : null
+        })
+      }
 
       // Get project and file info for notification
       const projectDoc = await getDoc(doc(db, 'projects', projectId))
@@ -124,6 +161,19 @@ export const useCommentStore = create<CommentState>((set, get) => ({
       toast.error('Lỗi cập nhật: ' + error.message)
     }
   },
+
+  togglePin: async (projectId: string, commentId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, 'projects', projectId, 'comments', commentId), {
+        isPinned: !currentStatus
+      })
+    } catch (error: any) {
+      console.error('Failed to toggle pin:', error)
+      toast.error('Lỗi cập nhật pin: ' + (error.message || String(error)))
+    }
+  },
+
+  
 
   cleanup: () => {
     const { unsubscribe } = get()

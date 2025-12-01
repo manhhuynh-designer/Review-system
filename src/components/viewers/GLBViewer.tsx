@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, OrbitControls, useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
@@ -6,7 +6,12 @@ import * as THREE from 'three'
 type GLBViewerProps = {
   url: string
   autoRotate?: boolean
-  className?: string // Use Tailwind classes to control height, e.g. h-[400px]
+  className?: string
+}
+
+export interface GLBViewerRef {
+  getCameraState: () => { position: [number, number, number], target: [number, number, number] } | null
+  setCameraState: (state: { position: [number, number, number], target: [number, number, number] }) => void
 }
 
 function FitAndRender({ url, autoRotate = true }: { url: string; autoRotate?: boolean }) {
@@ -33,8 +38,8 @@ function FitAndRender({ url, autoRotate = true }: { url: string; autoRotate?: bo
     const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180)
     const distance = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.6
     camera.position.set(distance, distance * 0.6, distance)
-    ;(camera as THREE.PerspectiveCamera).near = distance / 100
-    ;(camera as THREE.PerspectiveCamera).far = distance * 100
+      ; (camera as THREE.PerspectiveCamera).near = distance / 100
+      ; (camera as THREE.PerspectiveCamera).far = distance * 100
     camera.updateProjectionMatrix()
   }, [camera])
 
@@ -51,7 +56,36 @@ function FitAndRender({ url, autoRotate = true }: { url: string; autoRotate?: bo
   )
 }
 
-export function GLBViewer({ url, autoRotate = true, className }: GLBViewerProps) {
+const SceneContent = forwardRef<GLBViewerRef, { url: string, autoRotate: boolean }>((props, ref) => {
+  const { camera } = useThree()
+  const controlsRef = useRef<any>(null)
+
+  useImperativeHandle(ref, () => ({
+    getCameraState: () => {
+      if (!controlsRef.current) return null
+      const pos = camera.position.toArray() as [number, number, number]
+      const target = controlsRef.current.target.toArray() as [number, number, number]
+      return { position: pos, target }
+    },
+    setCameraState: (state) => {
+      if (!controlsRef.current) return
+      camera.position.set(...state.position)
+      controlsRef.current.target.set(...state.target)
+      controlsRef.current.update()
+    }
+  }))
+
+  return (
+    <>
+      <FitAndRender url={props.url} autoRotate={props.autoRotate} />
+      <Environment preset="city" />
+      <OrbitControls ref={controlsRef} enablePan enableZoom enableRotate makeDefault />
+    </>
+  )
+})
+SceneContent.displayName = 'SceneContent'
+
+export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRotate = true, className }, ref) => {
   return (
     <div className={className ?? 'h-[400px]'}>
       <Canvas shadows camera={{ position: [2, 1.2, 2], fov: 45 }} dpr={[1, 2]}>
@@ -66,12 +100,11 @@ export function GLBViewer({ url, autoRotate = true, className }: GLBViewerProps)
             </Html>
           }
         >
-          <FitAndRender url={url} autoRotate={autoRotate} />
-          <Environment preset="city" />
+          <SceneContent ref={ref} url={url} autoRotate={autoRotate} />
         </Suspense>
-        <OrbitControls enablePan enableZoom enableRotate makeDefault />
       </Canvas>
     </div>
   )
-}
+})
+GLBViewer.displayName = 'GLBViewer'
 
