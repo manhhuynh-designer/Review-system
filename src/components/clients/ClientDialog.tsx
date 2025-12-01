@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useClientStore } from '@/stores/clients'
 import { useAuthStore } from '@/stores/auth'
 import type { Client } from '@/types'
@@ -29,6 +29,17 @@ export function ClientDialog({ open, onOpenChange, client }: Props) {
   const [phone, setPhone] = useState(client?.phone || '')
   const [company, setCompany] = useState(client?.company || '')
   const [notes, setNotes] = useState(client?.notes || '')
+
+  // Update form when client prop changes or dialog opens
+  useEffect(() => {
+    if (open && client) {
+      setName(client.name || '')
+      setEmail(client.email || '')
+      setPhone(client.phone || '')
+      setCompany(client.company || '')
+      setNotes(client.notes || '')
+    }
+  }, [open, client])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

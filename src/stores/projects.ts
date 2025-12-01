@@ -125,12 +125,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ loading: true })
     try {
       const now = Timestamp.now()
+      
+      // Filter out undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      )
+      
       const docRef = await addDoc(collection(db, 'projects'), {
         status: 'active',
         tags: [],
         createdAt: now,
         updatedAt: now,
-        ...data,
+        ...cleanData,
       })
       toast.success('Tạo dự án thành công')
       return docRef.id
@@ -145,8 +151,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   updateProject: async (id: string, data: Partial<Project>) => {
     set({ loading: true })
     try {
+      // Filter out undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      )
+      
       await updateDoc(doc(db, 'projects', id), {
-        ...data,
+        ...cleanData,
         updatedAt: Timestamp.now()
       } as any)
       toast.success('Cập nhật thành công')

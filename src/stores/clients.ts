@@ -99,8 +99,14 @@ export const useClientStore = create<ClientState>((set, get) => ({
     set({ loading: true })
     try {
       const now = Timestamp.now()
+      
+      // Filter out undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      )
+      
       const docRef = await addDoc(collection(db, 'clients'), {
-        ...data,
+        ...cleanData,
         adminEmail,
         createdAt: now,
         updatedAt: now
@@ -118,8 +124,13 @@ export const useClientStore = create<ClientState>((set, get) => ({
   updateClient: async (id: string, data: Partial<Client>) => {
     set({ loading: true })
     try {
+      // Filter out undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      )
+      
       await updateDoc(doc(db, 'clients', id), {
-        ...data,
+        ...cleanData,
         updatedAt: Timestamp.now()
       } as any)
       toast.success('Cập nhật khách hàng thành công')
