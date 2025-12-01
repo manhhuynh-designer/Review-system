@@ -98,40 +98,146 @@ export function AnnotationToolbar({
     }, [])
 
     return (
-        <div
-            ref={toolbarRef}
-            className="absolute bottom-4 left-1/2 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 flex flex-col gap-3 z-10 cursor-move select-none"
-            style={{
-                transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`
-            }}
-            onMouseDown={handleMouseDown}
-        >
-            {/* Drag Handle */}
-            <div className="flex justify-center -mt-1 mb-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                <GripHorizontal className="w-5 h-5" />
-            </div>
+        <>
+            {/* Desktop: Draggable popup toolbar */}
+            <div
+                ref={toolbarRef}
+                className="hidden sm:flex absolute bottom-4 left-1/2 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 flex-col gap-3 z-10 cursor-move select-none"
+                style={{
+                    transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`
+                }}
+                onMouseDown={handleMouseDown}
+            >
+                {/* Drag Handle */}
+                <div className="flex justify-center -mt-1 mb-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                    <GripHorizontal className="w-5 h-5" />
+                </div>
 
-            {/* Drawing Tools */}
-            <div className="flex items-center gap-1">
-                {toolButtons.map(({ id, icon: Icon, label }) => (
+                {/* Drawing Tools */}
+                <div className="flex items-center gap-1">
+                    {toolButtons.map(({ id, icon: Icon, label }) => (
+                        <Button
+                            key={id}
+                            variant={tool === id ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => onToolChange(id)}
+                            className="h-9 w-9 p-0"
+                            title={label}
+                        >
+                            <Icon className="w-4 h-4" />
+                        </Button>
+                    ))}
+                </div>
+
+                <Separator />
+
+                {/* Properties */}
+                <div className="flex items-center gap-3">
+                    {/* Stroke Width */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">Width:</span>
+                        <Slider
+                            value={[strokeWidth]}
+                            onValueChange={(values) => onStrokeWidthChange(values[0])}
+                            min={1}
+                            max={10}
+                            step={1}
+                            className="w-24"
+                        />
+                        <span className="text-xs text-muted-foreground w-6">{strokeWidth}px</span>
+                    </div>
+
+                    <Separator orientation="vertical" className="h-6" />
+
+                    {/* Color Palette */}
+                    <div className="flex items-center gap-1">
+                        {COLORS.map((c) => (
+                            <button
+                                key={c.value}
+                                onClick={() => onColorChange(c.value)}
+                                className={`w-7 h-7 rounded-full border-2 transition-all ${color === c.value ? 'border-primary scale-110' : 'border-muted hover:border-muted-foreground'
+                                    }`}
+                                style={{ backgroundColor: c.value }}
+                                title={c.name}
+                                aria-label={`Color: ${c.name}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <Separator />
+
+                {/* Actions */}
+                <div className="flex items-center gap-1">
                     <Button
-                        key={id}
-                        variant={tool === id ? 'default' : 'ghost'}
+                        variant="ghost"
                         size="sm"
-                        onClick={() => onToolChange(id)}
-                        className="h-9 w-9 p-0"
-                        title={label}
+                        onClick={onUndo}
+                        disabled={!canUndo}
+                        className="h-8 px-2"
+                        title="Undo (Ctrl+Z)"
                     >
-                        <Icon className="w-4 h-4" />
+                        <Undo2 className="w-4 h-4 mr-1" />
+                        Undo
                     </Button>
-                ))}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onRedo}
+                        disabled={!canRedo}
+                        className="h-8 px-2"
+                        title="Redo (Ctrl+Y)"
+                    >
+                        <Redo2 className="w-4 h-4 mr-1" />
+                        Redo
+                    </Button>
+
+                    <Separator orientation="vertical" className="h-6 mx-1" />
+
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onClear}
+                        className="h-8 px-2 text-destructive hover:text-destructive"
+                        title="Clear all"
+                    >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Clear
+                    </Button>
+
+                    <Separator orientation="vertical" className="h-6 mx-1" />
+
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={onDone}
+                        className="h-8 px-3"
+                    >
+                        <Check className="w-4 h-4 mr-1" />
+                        Done
+                    </Button>
+                </div>
             </div>
 
-            <Separator />
+            {/* Mobile: Fixed bottom toolbar with rows */}
+            <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t shadow-lg p-2 z-50 flex flex-col gap-2">
+                {/* Row 1: Drawing Tools */}
+                <div className="flex items-center gap-1">
+                    {toolButtons.map(({ id, icon: Icon, label }) => (
+                        <Button
+                            key={id}
+                            variant={tool === id ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => onToolChange(id)}
+                            className="h-9 flex-1 p-0"
+                            title={label}
+                        >
+                            <Icon className="w-4 h-4" />
+                        </Button>
+                    ))}
+                </div>
 
-            {/* Properties */}
-            <div className="flex items-center gap-3">
-                {/* Stroke Width */}
+                {/* Row 2: Stroke Width */}
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground whitespace-nowrap">Width:</span>
                     <Slider
@@ -140,20 +246,18 @@ export function AnnotationToolbar({
                         min={1}
                         max={10}
                         step={1}
-                        className="w-24"
+                        className="flex-1"
                     />
-                    <span className="text-xs text-muted-foreground w-6">{strokeWidth}px</span>
+                    <span className="text-xs text-muted-foreground w-8">{strokeWidth}px</span>
                 </div>
 
-                <Separator orientation="vertical" className="h-6" />
-
-                {/* Color Palette */}
-                <div className="flex items-center gap-1">
+                {/* Row 3: Color Palette */}
+                <div className="flex items-center justify-center gap-2">
                     {COLORS.map((c) => (
                         <button
                             key={c.value}
                             onClick={() => onColorChange(c.value)}
-                            className={`w-7 h-7 rounded-full border-2 transition-all ${color === c.value ? 'border-primary scale-110' : 'border-muted hover:border-muted-foreground'
+                            className={`w-8 h-8 rounded-full border-2 transition-all ${color === c.value ? 'border-primary scale-110' : 'border-muted hover:border-muted-foreground'
                                 }`}
                             style={{ backgroundColor: c.value }}
                             title={c.name}
@@ -161,60 +265,49 @@ export function AnnotationToolbar({
                         />
                     ))}
                 </div>
+
+                {/* Row 4: Actions */}
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onUndo}
+                        disabled={!canUndo}
+                        className="h-8 flex-1"
+                        title="Undo"
+                    >
+                        <Undo2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onRedo}
+                        disabled={!canRedo}
+                        className="h-8 flex-1"
+                        title="Redo"
+                    >
+                        <Redo2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onClear}
+                        className="h-8 flex-1 text-destructive hover:text-destructive"
+                        title="Clear"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={onDone}
+                        className="h-8 flex-1"
+                    >
+                        <Check className="w-4 h-4 mr-1" />
+                        Done
+                    </Button>
+                </div>
             </div>
-
-            <Separator />
-
-            {/* Actions */}
-            <div className="flex items-center gap-1">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onUndo}
-                    disabled={!canUndo}
-                    className="h-8 px-2"
-                    title="Undo (Ctrl+Z)"
-                >
-                    <Undo2 className="w-4 h-4 mr-1" />
-                    Undo
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onRedo}
-                    disabled={!canRedo}
-                    className="h-8 px-2"
-                    title="Redo (Ctrl+Y)"
-                >
-                    <Redo2 className="w-4 h-4 mr-1" />
-                    Redo
-                </Button>
-
-                <Separator orientation="vertical" className="h-6 mx-1" />
-
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onClear}
-                    className="h-8 px-2 text-destructive hover:text-destructive"
-                    title="Clear all"
-                >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Clear
-                </Button>
-
-                <Separator orientation="vertical" className="h-6 mx-1" />
-
-                <Button
-                    variant="default"
-                    size="sm"
-                    onClick={onDone}
-                    className="h-8 px-3"
-                >
-                    <Check className="w-4 h-4 mr-1" />
-                    Done
-                </Button>
-            </div>
-        </div>
+        </>
     )
 }

@@ -108,6 +108,7 @@ export function FileViewDialogShared({
 }: Props) {
   const [showComments, setShowComments] = useState(true)
   const [showOnlyCurrentTimeComments, setShowOnlyCurrentTimeComments] = useState(false)
+
   const [currentTime, setCurrentTime] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [videoFps, setVideoFps] = useState(30)
@@ -136,6 +137,7 @@ export function FileViewDialogShared({
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false)
   const [sequenceViewMode, setSequenceViewMode] = useState<'video' | 'carousel' | 'grid'>('video')
   const [frameDetailView, setFrameDetailView] = useState<number | null>(null)
+  const [navMode, setNavMode] = useState<'frame' | 'marker'>('frame')
 
   // Update current version when file changes
   useEffect(() => {
@@ -536,7 +538,7 @@ export function FileViewDialogShared({
           {/* Scaled content wrapper (image + annotations) */}
           <div
             className="origin-center cursor-grab active:cursor-grabbing"
-            style={{ 
+            style={{
               transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
               pointerEvents: zoom > 1 ? 'auto' : 'none'
             }}
@@ -704,9 +706,41 @@ export function FileViewDialogShared({
         link.click()
       }
 
+      // Marker navigation handlers
+      const sortedMarkers = allFileComments
+        .filter(c => c.timestamp !== null && c.timestamp !== undefined)
+        .sort((a, b) => a.timestamp! - b.timestamp!)
+
+      const handleNextMarker = () => {
+        const nextMarker = sortedMarkers.find(c => c.timestamp! > currentTime)
+        if (nextMarker) {
+          setCurrentTime(nextMarker.timestamp!)
+        }
+      }
+
+      const handlePrevMarker = () => {
+        const prevMarker = sortedMarkers.reverse().find(c => c.timestamp! < currentTime)
+        if (prevMarker) {
+          setCurrentTime(prevMarker.timestamp!)
+        }
+      }
+
+      const handleFirstMarker = () => {
+        if (sortedMarkers.length > 0) {
+          setCurrentTime(sortedMarkers[0].timestamp!)
+        }
+      }
+
+      const handleLastMarker = () => {
+        if (sortedMarkers.length > 0) {
+          setCurrentTime(sortedMarkers[sortedMarkers.length - 1].timestamp!)
+        }
+      }
+
       return (
-        <div className="space-y-3 w-full h-full flex flex-col max-h-[calc(100%-8rem)] 2xl:max-h-[calc(100%-10rem)]">
-          <div className="relative bg-black flex-1 min-h-0 max-h-[calc(100vh-12rem)] 2xl:max-h-[calc(100vh-15rem)]">
+        <div className="space-y-2 sm:space-y-3 w-full h-full flex flex-col">
+          {/* Video Player - Fixed height on mobile */}
+          <div className="relative bg-black flex-shrink-0 h-[40vh] sm:h-auto sm:flex-1 sm:min-h-0 sm:max-h-[calc(100vh-12rem)] 2xl:max-h-[calc(100vh-15rem)]">
             <CustomVideoPlayer
               ref={customVideoPlayerRef}
               src={effectiveUrl}
@@ -726,19 +760,53 @@ export function FileViewDialogShared({
                 setVideoFps(fps)
               }}
               onExportFrame={handleExportFrame}
-              className="w-full"
+              className="w-full h-full"
             />
             {renderAnnotationOverlay()}
           </div>
 
-          <VideoFrameControls
-            onNextFrame={handleNextFrame}
-            onPrevFrame={handlePrevFrame}
-            onSkipForward={handleSkipForward}
-            onSkipBackward={handleSkipBackward}
-            onExportFrame={() => customVideoPlayerRef.current?.exportFrame()}
-            currentFps={videoFps}
-          />
+          {/* Frame Controls + Filter/Comment Toggle on Mobile */}
+          <div className="flex-shrink-0 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <VideoFrameControls
+                  onNextFrame={handleNextFrame}
+                  onPrevFrame={handlePrevFrame}
+                  onSkipForward={handleSkipForward}
+                  onSkipBackward={handleSkipBackward}
+                  onNextMarker={handleNextMarker}
+                  onPrevMarker={handlePrevMarker}
+                  onFirstMarker={handleFirstMarker}
+                  onLastMarker={handleLastMarker}
+                  currentFps={videoFps}
+                  mode={navMode}
+                  onModeChange={setNavMode}
+                />
+              </div>
+
+              {/* Mobile: Filter Toggle + Mode Toggle */}
+              <div className="flex sm:hidden gap-1">
+                <Button
+                  variant={navMode === 'marker' ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setNavMode(navMode === 'frame' ? 'marker' : 'frame')}
+                  className="h-8 px-2"
+                  title={navMode === 'frame' ? 'Chuyển sang Marker Navigation' : 'Chuyển sang Frame Navigation'}
+                >
+                  {navMode === 'frame' ? 'F' : 'M'}
+                </Button>
+                <Button
+                  variant={showOnlyCurrentTimeComments ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
+                  className="h-8 px-2"
+                  title="Lọc theo thời gian"
+                >
+                  <Filter className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )
     }
@@ -771,418 +839,435 @@ export function FileViewDialogShared({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[100vw] sm:max-w-[98vw] w-full h-[100vh] sm:h-[98vh] xl:h-[95vh] 2xl:h-[90vh] flex flex-col p-0 gap-0 [&>button]:hidden">
-        <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 flex flex-row items-center justify-between space-y-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-            <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
-              {getFileTypeIcon(file.type)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2 truncate">
-                <span className="truncate">{file.name}</span>
-                <Badge variant="outline" className="text-xs font-normal shrink-0">
-                  v{currentVersion}
-                </Badge>
-              </DialogTitle>
-              <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                <span>{getFileTypeLabel(file.type)}</span>
-                <span className="hidden sm:inline">•</span>
-                <span className="hidden sm:inline">{formatFileSize(current.metadata.size)}</span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {format(uploadDate, 'dd/MM/yyyy HH:mm')}
-                </span>
+        <DialogContent className="max-w-[100vw] sm:max-w-[98vw] w-full h-[100vh] sm:h-[98vh] xl:h-[95vh] 2xl:h-[90vh] flex flex-col p-0 gap-0 [&>button]:hidden">
+          <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
+                {getFileTypeIcon(file.type)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2 truncate">
+                  <span className="truncate">{file.name}</span>
+                  <Badge variant="outline" className="text-xs font-normal shrink-0">
+                    v{currentVersion}
+                  </Badge>
+                </DialogTitle>
+                <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                  <span>{getFileTypeLabel(file.type)}</span>
+                  <span className="hidden sm:inline">•</span>
+                  <span className="hidden sm:inline">{formatFileSize(current.metadata.size)}</span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {format(uploadDate, 'dd/MM/yyyy HH:mm')}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Version Selector - Hidden on mobile, available in menu */}
-            <div className="hidden sm:block">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Clock className="w-4 h-4" />
-                    <span className="hidden md:inline">Lịch sử phiên bản</span>
-                    <span className="md:hidden">Lịch sử</span>
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  {file.versions
-                    .sort((a, b) => b.version - a.version)
-                    .map((version) => (
-                      <DropdownMenuItem
-                        key={version.version}
-                        className="flex items-center justify-between p-3 cursor-pointer"
-                        onClick={() => onSwitchVersion?.(file.id, version.version)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${version.version === currentVersion
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
-                            }`}>
-                            v{version.version}
-                          </div>
-                          <div>
-                            <div className="font-medium">
-                              {version.version === currentVersion ? 'Phiên bản hiện tại' : `Phiên bản ${version.version}`}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {format(version.uploadedAt?.toDate ? version.uploadedAt.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
-                            </div>
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-
-                  {onUploadNewVersion && (
-                    <>
-                      <div className="h-px bg-border my-1" />
-                      <div className="p-2">
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          className="hidden"
-                          aria-label="Upload new version"
-                          onChange={(e) => {
-                            const uploadedFile = e.target.files?.[0]
-                            if (uploadedFile && onUploadNewVersion) {
-                              onUploadNewVersion(uploadedFile, file.id)
-                            }
-                          }}
-                        />
-                        <Button
-                          className="w-full justify-start"
-                          variant="ghost"
-                          onClick={() => fileInputRef.current?.click()}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Version Selector - Hidden on mobile, available in menu */}
+              <div className="hidden sm:block">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Clock className="w-4 h-4" />
+                      <span className="hidden md:inline">Lịch sử phiên bản</span>
+                      <span className="md:hidden">Lịch sử</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80">
+                    {file.versions
+                      .sort((a, b) => b.version - a.version)
+                      .map((version) => (
+                        <DropdownMenuItem
+                          key={version.version}
+                          className="flex items-center justify-between p-3 cursor-pointer"
+                          onClick={() => onSwitchVersion?.(file.id, version.version)}
                         >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Tải lên phiên bản mới
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            {/* Mobile: Dropdown Menu with all actions */}
-            <div className="sm:hidden">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-60">
-                  <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                    Lịch sử phiên bản
-                  </div>
-                  {file.versions
-                    .sort((a, b) => b.version - a.version)
-                    .slice(0, 3) // Show only last 3 versions on mobile
-                    .map((version) => (
-                      <DropdownMenuItem
-                        key={version.version}
-                        className="flex items-center justify-between p-2 cursor-pointer"
-                        onClick={() => onSwitchVersion?.(file.id, version.version)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${version.version === currentVersion
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
-                            }`}>
-                            v{version.version}
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${version.version === currentVersion
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground'
+                              }`}>
+                              v{version.version}
+                            </div>
+                            <div>
+                              <div className="font-medium">
+                                {version.version === currentVersion ? 'Phiên bản hiện tại' : `Phiên bản ${version.version}`}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {format(version.uploadedAt?.toDate ? version.uploadedAt.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
+                              </div>
+                            </div>
                           </div>
-                          <span className="text-sm">
-                            {version.version === currentVersion ? 'Hiện tại' : `Phiên bản ${version.version}`}
-                          </span>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                  
-                  {file.versions.length > 3 && (
-                    <DropdownMenuItem className="text-xs text-muted-foreground">
-                      ... và {file.versions.length - 3} phiên bản khác
-                    </DropdownMenuItem>
-                  )}
-                  
-                  <div className="h-px bg-border my-1" />
-                  
-                  {file.type === 'image' && file.versions.length > 1 && (
-                    <DropdownMenuItem onClick={() => setCompareMode(!compareMode)}>
-                      <Columns className="w-4 h-4 mr-2" />
-                      {compareMode ? 'Thoát so sánh' : 'So sánh phiên bản'}
-                    </DropdownMenuItem>
-                  )}
-                  
-                  <DropdownMenuItem asChild>
-                    <a href={effectiveUrl} download target="_blank" rel="noreferrer">
-                      <Download className="w-4 h-4 mr-2" />
-                      Tải xuống
-                    </a>
-                  </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => setShowComments(!showComments)}>
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    {showComments ? 'Ẩn bình luận' : 'Hiện bình luận'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                        </DropdownMenuItem>
+                      ))}
 
-            {/* Compare Button (only for images) - Hidden on mobile */}
-            {file.type === 'image' && file.versions.length > 1 && (
+                    {onUploadNewVersion && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        <div className="p-2">
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            aria-label="Upload new version"
+                            onChange={(e) => {
+                              const uploadedFile = e.target.files?.[0]
+                              if (uploadedFile && onUploadNewVersion) {
+                                onUploadNewVersion(uploadedFile, file.id)
+                              }
+                            }}
+                          />
+                          <Button
+                            className="w-full justify-start"
+                            variant="ghost"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <Upload className="w-4 h-4 mr-2" />
+                            Tải lên phiên bản mới
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Mobile: Dropdown Menu with all actions */}
+              <div className="sm:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60">
+                    <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                      Lịch sử phiên bản
+                    </div>
+                    {file.versions
+                      .sort((a, b) => b.version - a.version)
+                      .slice(0, 3) // Show only last 3 versions on mobile
+                      .map((version) => (
+                        <DropdownMenuItem
+                          key={version.version}
+                          className="flex items-center justify-between p-2 cursor-pointer"
+                          onClick={() => onSwitchVersion?.(file.id, version.version)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${version.version === currentVersion
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground'
+                              }`}>
+                              v{version.version}
+                            </div>
+                            <span className="text-sm">
+                              {version.version === currentVersion ? 'Hiện tại' : `Phiên bản ${version.version}`}
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+
+                    {file.versions.length > 3 && (
+                      <DropdownMenuItem className="text-xs text-muted-foreground">
+                        ... và {file.versions.length - 3} phiên bản khác
+                      </DropdownMenuItem>
+                    )}
+
+                    <div className="h-px bg-border my-1" />
+
+                    {file.type === 'image' && file.versions.length > 1 && (
+                      <DropdownMenuItem onClick={() => setCompareMode(!compareMode)}>
+                        <Columns className="w-4 h-4 mr-2" />
+                        {compareMode ? 'Thoát so sánh' : 'So sánh phiên bản'}
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuItem asChild>
+                      <a href={effectiveUrl} download target="_blank" rel="noreferrer">
+                        <Download className="w-4 h-4 mr-2" />
+                        Tải xuống
+                      </a>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={() => setShowComments(!showComments)}>
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      {showComments ? 'Ẩn bình luận' : 'Hiện bình luận'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Compare Button (only for images) - Hidden on mobile */}
+              {file.type === 'image' && file.versions.length > 1 && (
+                <Button
+                  variant={compareMode ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setCompareMode(!compareMode)}
+                  className="hidden sm:flex"
+                >
+                  <Columns className="w-4 h-4 mr-2" />
+                  <span className="hidden md:inline">So sánh</span>
+                  <span className="md:hidden">So sánh</span>
+                </Button>
+              )}
+
+              <Button variant="outline" size="sm" asChild className="hidden sm:flex">
+                <a href={effectiveUrl} download target="_blank" rel="noreferrer">
+                  <Download className="w-4 h-4 mr-2" />
+                  <span className="hidden md:inline">Tải xuống</span>
+                  <span className="md:hidden">Tải</span>
+                </a>
+              </Button>
+
               <Button
-                variant={compareMode ? 'secondary' : 'outline'}
+                variant={showComments ? 'secondary' : 'outline'}
                 size="sm"
-                onClick={() => setCompareMode(!compareMode)}
+                onClick={() => setShowComments(!showComments)}
                 className="hidden sm:flex"
               >
-                <Columns className="w-4 h-4 mr-2" />
-                <span className="hidden md:inline">So sánh</span>
-                <span className="md:hidden">So sánh</span>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                <span className="hidden md:inline">Bình luận</span>
+                <span className="md:hidden">BL</span>
               </Button>
-            )}
 
-            <Button variant="outline" size="sm" asChild className="hidden sm:flex">
-              <a href={effectiveUrl} download target="_blank" rel="noreferrer">
-                <Download className="w-4 h-4 mr-2" />
-                <span className="hidden md:inline">Tải xuống</span>
-                <span className="md:hidden">Tải</span>
-              </a>
-            </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 ml-2"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </DialogHeader>
 
-            <Button
-              variant={showComments ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setShowComments(!showComments)}
-              className="hidden sm:flex"
-            >
-              <MessageSquare className="w-4 h-4 mr-2" />
-              <span className="hidden md:inline">Bình luận</span>
-              <span className="md:hidden">BL</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 ml-2"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </DialogHeader>
-
-        <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
-          {/* Main Content Area */}
-          <div className={`flex-1 overflow-auto bg-background/50 flex flex-col ${showComments && !isVideoFullscreen ? 'sm:border-r' : ''}`}>
-            {/* Toolbar for Annotation */}
-            <div className="p-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 gap-2">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                {!isAnnotating ? (
-                  <Button onClick={handleStartAnnotating} variant="outline" size="sm" className="gap-2 flex-1 sm:flex-initial">
-                    <div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-600" />
-                    Thêm ghi chú
-                  </Button>
-                ) : isReadOnly ? (
-                  <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Đang xem ghi chú
+          <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+            {/* Main Content Area */}
+            <div className={`flex-1 overflow-auto bg-background/50 flex flex-col ${showComments && !isVideoFullscreen ? 'sm:border-r' : ''}`}>
+              {/* Toolbar for Annotation */}
+              <div className="p-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 gap-2">
+                <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto">
+                  {!isAnnotating ? (
+                    <Button onClick={handleStartAnnotating} variant="outline" size="sm" className="gap-2 flex-1 sm:flex-initial">
+                      <div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-600" />
+                      Thêm ghi chú
+                    </Button>
+                  ) : isReadOnly ? (
+                    <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Đang xem ghi chú
+                      </div>
+                      <Button onClick={handleDoneAnnotating} variant="ghost" size="sm" className="h-7 px-2 hover:bg-destructive/10 hover:text-destructive">
+                        Đóng
+                      </Button>
                     </div>
-                    <Button onClick={handleDoneAnnotating} variant="ghost" size="sm" className="h-7 px-2 hover:bg-destructive/10 hover:text-destructive">
-                      Đóng
+                  ) : (
+                    <div className="text-sm font-medium text-muted-foreground animate-pulse">
+                      Đang vẽ ghi chú...
+                    </div>
+                  )}
+                </div>
+
+                {/* Filter Toggle - Desktop only */}
+                {(file.type === 'video' || file.type === 'sequence') && (
+                  <div className="hidden sm:flex items-center gap-2">
+                    <Button
+                      variant={showOnlyCurrentTimeComments ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
+                      className={`${showOnlyCurrentTimeComments ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''}`}
+                      title="Chỉ hiện bình luận tại thời điểm này"
+                    >
+                      <Filter className="w-4 h-4 mr-2" />
+                      {showOnlyCurrentTimeComments ? 'Đang lọc theo thời gian' : 'Lọc theo thời gian'}
                     </Button>
                   </div>
-                ) : (
-                  <div className="text-sm font-medium text-muted-foreground animate-pulse">
-                    Đang vẽ ghi chú...
-                  </div>
                 )}
               </div>
 
-              {/* Filter Toggle */}
-              {(file.type === 'video' || file.type === 'sequence') && (
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Button
-                    variant={showComments ? 'secondary' : 'outline'}
-                    size="sm"
-                    onClick={() => setShowComments(!showComments)}
-                    className="sm:hidden flex-1"
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    {showComments ? 'Ẩn bình luận' : 'Bình luận'}
-                  </Button>
-                  <Button
-                    variant={showOnlyCurrentTimeComments ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
-                    className={`${showOnlyCurrentTimeComments ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''} flex-1 sm:flex-initial`}
-                    title="Chỉ hiện bình luận tại thời điểm này"
-                  >
-                    <Filter className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">{showOnlyCurrentTimeComments ? 'Đang lọc theo thời gian' : 'Lọc theo thời gian'}</span>
-                    <span className="sm:hidden">{showOnlyCurrentTimeComments ? 'Đang lọc' : 'Lọc'}</span>
-                  </Button>
+              {/* File Preview */}
+              <div className="flex-1 p-2 flex items-center justify-center min-h-0 overflow-hidden">
+                {renderFilePreview()}
+              </div>
+            </div>
+
+            {/* Comments Sidebar - Normal Mode */}
+            {showComments && !isVideoFullscreen && (
+              <div className="w-full sm:w-[350px] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l h-[38vh] sm:h-auto sm:max-h-none">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+                  <CommentsList
+                    comments={fileComments}
+                    currentUserName={currentUserName}
+                    onResolveToggle={onResolveToggle}
+                    onTimestampClick={handleTimestampClick}
+                    onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
+                    onReply={async (parentCommentId, userName, content) => {
+                      await onAddComment(userName, content, undefined, parentCommentId)
+                    }}
+                    isSequence={file.type === 'sequence'}
+                    isAdmin={isAdmin}
+                  />
+                  {fileComments.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      Chưa có bình luận nào
+                      {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* File Preview */}
-            <div className="flex-1 p-2 flex items-center justify-center min-h-0 overflow-hidden">
-              {renderFilePreview()}
-            </div>
+                {/* Desktop: Always show comment input */}
+                <div className="hidden sm:block p-4 border-t bg-background flex-shrink-0">
+                  <AddComment
+                    onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                      const hasData = annotationData && annotationData.length > 0
+                      const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                        konva: annotationData,
+                        camera: glbViewerRef.current?.getCameraState()
+                      }) : null
+
+                      await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+
+                      if (dataToSave) {
+                        setAnnotationData(null)
+                        setIsAnnotating(false)
+                      }
+                    }}
+                    userName={currentUserName}
+                    onUserNameChange={onUserNameChange}
+                    currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                    showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                    annotationData={!isReadOnly ? annotationData : null}
+                    onAnnotationClick={handleStartAnnotating}
+                  />
+                </div>
+
+                {/* Mobile: Comment Input (Always visible now, no toggle) */}
+                <div className="sm:hidden border-t bg-background flex-shrink-0 p-2">
+                  <AddComment
+                    onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                      const hasData = annotationData && annotationData.length > 0
+                      const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                        konva: annotationData,
+                        camera: glbViewerRef.current?.getCameraState()
+                      }) : null
+
+                      await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+
+                      if (dataToSave) {
+                        setAnnotationData(null)
+                        setIsAnnotating(false)
+                      }
+                    }}
+                    userName={currentUserName}
+                    onUserNameChange={onUserNameChange}
+                    currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                    showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                    annotationData={!isReadOnly ? annotationData : null}
+                    onAnnotationClick={handleStartAnnotating}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Comments Sidebar - Fullscreen Mode (Absolutely Positioned) */}
+            {showComments && isVideoFullscreen && (
+              <div
+                className="fixed top-0 right-0 left-[75vw] w-[25vw] h-screen flex flex-col bg-background border-l border-border z-50"
+              >
+                <div className="flex-1 overflow-y-auto p-4">
+                  <CommentsList
+                    comments={fileComments}
+                    currentUserName={currentUserName}
+                    onResolveToggle={onResolveToggle}
+                    onTimestampClick={handleTimestampClick}
+                    onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
+                    onReply={async (parentCommentId, userName, content) => {
+                      await onAddComment(userName, content, undefined, parentCommentId)
+                    }}
+                    isSequence={file.type === 'sequence'}
+                    isAdmin={isAdmin}
+                  />
+                  {fileComments.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      Chưa có bình luận nào
+                      {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 border-t bg-background">
+                  <AddComment
+                    onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData) => {
+                      const hasData = annotationData && annotationData.length > 0
+                      const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                        konva: annotationData,
+                        camera: glbViewerRef.current?.getCameraState()
+                      }) : null
+
+                      await onAddComment(userName, content, timestamp, parentCommentId, dataToSave)
+
+                      if (dataToSave) {
+                        setAnnotationData(null)
+                        setIsAnnotating(false)
+                      }
+                    }}
+                    userName={currentUserName}
+                    onUserNameChange={onUserNameChange}
+                    currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                    showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                    annotationData={!isReadOnly ? annotationData : null}
+                    onAnnotationClick={handleStartAnnotating}
+                  />
+                </div>
+              </div>
+            )}
           </div>
+        </DialogContent>
+      </Dialog >
 
-          {/* Comments Sidebar - Normal Mode */}
-          {showComments && !isVideoFullscreen && (
-            <div className="w-full sm:w-[350px] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l max-h-[40vh] sm:max-h-none">
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
-                <CommentsList
-                  comments={fileComments}
-                  currentUserName={currentUserName}
-                  onResolveToggle={onResolveToggle}
-                  onTimestampClick={handleTimestampClick}
-                  onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
-                  onReply={async (parentCommentId, userName, content) => {
-                    await onAddComment(userName, content, undefined, parentCommentId)
-                  }}
-                  isSequence={file.type === 'sequence'}
-                  isAdmin={isAdmin}
-                />
-                {fileComments.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8">
-                    Chưa có bình luận nào
-                    {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
-                  </div>
-                )}
-              </div>
-              <div className="p-3 sm:p-4 border-t bg-background">
-                <AddComment
-                  onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
-                    // Inject annotation data from state if we are in annotation mode
-                    // We check annotationData directly, not just isAnnotating, to support "Done" state
-                    const hasData = annotationData && annotationData.length > 0
-                    const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                      konva: annotationData,
-                      camera: glbViewerRef.current?.getCameraState()
-                    }) : null
+      {/* Frame Detail Dialog - For viewing individual frames from sequence grid */}
+      {
+        file?.type === 'sequence' && frameDetailView !== null && (() => {
+          const sequenceUrls = current?.sequenceUrls || []
+          const frameCaptions = current?.frameCaptions || {}
 
-                    await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
-
-                    // Clear annotation data after successful submit
-                    if (dataToSave) {
-                      setAnnotationData(null)
-                      setIsAnnotating(false)
-                    }
-                  }}
-                  userName={currentUserName}
-                  onUserNameChange={onUserNameChange}
-                  currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                  showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                  annotationData={!isReadOnly ? annotationData : null}
-                  onAnnotationClick={handleStartAnnotating}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Comments Sidebar - Fullscreen Mode (Absolutely Positioned) */}
-          {showComments && isVideoFullscreen && (
-            <div
-              className="fixed top-0 right-0 left-[75vw] w-[25vw] h-screen flex flex-col bg-background border-l border-border z-50"
-            >
-              <div className="flex-1 overflow-y-auto p-4">
-                <CommentsList
-                  comments={fileComments}
-                  currentUserName={currentUserName}
-                  onResolveToggle={onResolveToggle}
-                  onTimestampClick={handleTimestampClick}
-                  onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
-                  onReply={async (parentCommentId, userName, content) => {
-                    await onAddComment(userName, content, undefined, parentCommentId)
-                  }}
-                  isSequence={file.type === 'sequence'}
-                  isAdmin={isAdmin}
-                />
-                {fileComments.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8">
-                    Chưa có bình luận nào
-                    {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
-                  </div>
-                )}
-              </div>
-              <div className="p-4 border-t bg-background">
-                <AddComment
-                  onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData) => {
-                    const hasData = annotationData && annotationData.length > 0
-                    const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                      konva: annotationData,
-                      camera: glbViewerRef.current?.getCameraState()
-                    }) : null
-
-                    await onAddComment(userName, content, timestamp, parentCommentId, dataToSave)
-
-                    if (dataToSave) {
-                      setAnnotationData(null)
-                      setIsAnnotating(false)
-                    }
-                  }}
-                  userName={currentUserName}
-                  onUserNameChange={onUserNameChange}
-                  currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                  showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                  annotationData={!isReadOnly ? annotationData : null}
-                  onAnnotationClick={handleStartAnnotating}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* Frame Detail Dialog - For viewing individual frames from sequence grid */}
-    {file?.type === 'sequence' && frameDetailView !== null && (() => {
-      const sequenceUrls = current?.sequenceUrls || []
-      const frameCaptions = current?.frameCaptions || {}
-      
-      return (
-        <FileViewDialogShared
-          file={{
-            ...file,
-            type: 'image',
-            name: `${file.name} - Frame ${frameDetailView + 1}`
-          }}
-          projectId={_projectId}
-          resolvedUrl={sequenceUrls[frameDetailView]}
-          open={frameDetailView !== null}
-          onOpenChange={(open) => !open && setFrameDetailView(null)}
-          comments={allFileComments.filter(c => c.timestamp === frameDetailView)}
-          currentUserName={currentUserName}
-          onUserNameChange={onUserNameChange}
-          onAddComment={async (userName, content, _timestamp, parentCommentId, annotationData, attachments) => {
-            await onAddComment(userName, content, frameDetailView, parentCommentId, annotationData, attachments)
-          }}
-          onResolveToggle={onResolveToggle}
-          isAdmin={isAdmin}
-          onCaptionChange={onCaptionChange ? async (fileId, version, _frame, caption) => {
-            await onCaptionChange(fileId, version, frameDetailView, caption)
-          } : undefined}
-          sequenceContext={{
-            totalFrames: sequenceUrls.length,
-            currentFrameIndex: frameDetailView,
-            frameCaptions: frameCaptions,
-            onNavigateFrame: (newIndex) => {
-              setFrameDetailView(newIndex)
-            }
-          }}
-        />
-      )
-    })()}
-  </>
+          return (
+            <FileViewDialogShared
+              file={{
+                ...file,
+                type: 'image',
+                name: `${file.name} - Frame ${frameDetailView + 1}`
+              }}
+              projectId={_projectId}
+              resolvedUrl={sequenceUrls[frameDetailView]}
+              open={frameDetailView !== null}
+              onOpenChange={(open) => !open && setFrameDetailView(null)}
+              comments={allFileComments.filter(c => c.timestamp === frameDetailView)}
+              currentUserName={currentUserName}
+              onUserNameChange={onUserNameChange}
+              onAddComment={async (userName, content, _timestamp, parentCommentId, annotationData, attachments) => {
+                await onAddComment(userName, content, frameDetailView, parentCommentId, annotationData, attachments)
+              }}
+              onResolveToggle={onResolveToggle}
+              isAdmin={isAdmin}
+              onCaptionChange={onCaptionChange ? async (fileId, version, _frame, caption) => {
+                await onCaptionChange(fileId, version, frameDetailView, caption)
+              } : undefined}
+              sequenceContext={{
+                totalFrames: sequenceUrls.length,
+                currentFrameIndex: frameDetailView,
+                frameCaptions: frameCaptions,
+                onNavigateFrame: (newIndex) => {
+                  setFrameDetailView(newIndex)
+                }
+              }}
+            />
+          )
+        })()
+      }
+    </>
   )
 }

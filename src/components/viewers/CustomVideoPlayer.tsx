@@ -39,7 +39,6 @@ export const CustomVideoPlayer = forwardRef<CustomVideoPlayerRef, CustomVideoPla
     const [isMuted, setIsMuted] = useState(false)
     const [localCurrentTime, setLocalCurrentTime] = useState(0)
     const [isFullscreen, setIsFullscreen] = useState(false)
-    const [aspectRatio, setAspectRatio] = useState<number | null>(null)
     const [isPortrait, setIsPortrait] = useState(false)
 
     // Fullscreen change event listener
@@ -69,7 +68,6 @@ export const CustomVideoPlayer = forwardRef<CustomVideoPlayerRef, CustomVideoPla
             const videoHeight = video.videoHeight
             if (videoWidth && videoHeight) {
                 const ratio = videoWidth / videoHeight
-                setAspectRatio(ratio)
                 setIsPortrait(ratio < 1) // Portrait if width < height
             }
             

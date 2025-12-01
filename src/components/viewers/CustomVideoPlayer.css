@@ -43,8 +43,10 @@
     padding: 12px 16px 16px;
     position: relative;
     z-index: 30;
-    flex-shrink: 0; /* Prevent controls from being compressed */
-    margin-top: auto; /* Push to bottom */
+    flex-shrink: 0;
+    /* Prevent controls from being compressed */
+    margin-top: auto;
+    /* Push to bottom */
 }
 
 /* Timeline Wrapper */
@@ -299,6 +301,7 @@
 
     .controls-bar {
         gap: 8px;
+        flex-wrap: wrap;
     }
 
     .controls-left,
@@ -317,19 +320,42 @@
     }
 
     .time-display {
-        font-size: 12px;
-        min-width: 80px;
+        font-size: 11px;
+        min-width: 70px;
     }
 
     .speed-select {
         padding: 4px 8px;
-        font-size: 12px;
+        font-size: 11px;
+    }
+
+    /* Hide volume control on mobile to save space */
+    .controls-left .control-btn[title="Mute"],
+    .controls-left .control-btn[title="Unmute"] {
+        display: none;
+    }
+
+    /* Hide export frame on very small screens */
+    @media (max-width: 480px) {
+        .controls-right .control-btn[title="Xuất frame hiện tại"] {
+            display: none;
+        }
     }
 
     .marker-tooltip {
         min-width: 160px;
         max-width: 240px;
         font-size: 11px;
+        /* Adjust position to prevent off-screen */
+        left: auto;
+        right: 0;
+        transform: none;
+    }
+
+    .marker-tooltip::after {
+        left: auto;
+        right: 10px;
+        transform: none;
     }
 
     .marker-line {
@@ -351,36 +377,38 @@
 /* Responsive adjustments for larger screens (2K and above) */
 @media (min-width: 1920px) {
     .custom-video-player {
-        max-height: 80vh; /* Limit video height on large screens */
+        max-height: 80vh;
+        /* Limit video height on large screens */
     }
-    
+
     .custom-video-player video {
-        max-height: calc(80vh - 120px); /* Account for controls */
+        max-height: calc(80vh - 120px);
+        /* Account for controls */
     }
-    
+
     .video-controls {
         padding: 16px 20px 20px;
     }
-    
+
     .controls-bar {
         gap: 20px;
     }
-    
+
     .control-btn {
         width: 40px;
         height: 40px;
     }
-    
+
     .control-btn svg {
         width: 24px;
         height: 24px;
     }
-    
+
     .time-display {
         font-size: 16px;
         min-width: 120px;
     }
-    
+
     .speed-select {
         padding: 8px 16px;
         font-size: 14px;
@@ -389,9 +417,10 @@
 
 @media (min-width: 2560px) {
     .custom-video-player {
-        max-height: 70vh; /* Even more conservative on very large screens */
+        max-height: 70vh;
+        /* Even more conservative on very large screens */
     }
-    
+
     .custom-video-player video {
         max-height: calc(70vh - 120px);
     }

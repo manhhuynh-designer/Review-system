@@ -8,7 +8,7 @@ import { useProjectThumbnail } from '@/hooks/useProjectThumbnail'
 import type { Project } from '@/types'
 import { ProjectEditDialog } from './ProjectEditDialog'
 import { ProjectDeleteDialog } from './ProjectDeleteDialog'
-import { Calendar, User, Mail, AlertCircle, MoreVertical, Archive, ArchiveRestore, FolderOpen, Image as ImageIcon } from 'lucide-react'
+import { Calendar, User, Mail, AlertCircle, MoreVertical, Archive, ArchiveRestore, Image as ImageIcon } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,

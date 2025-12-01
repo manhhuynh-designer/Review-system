@@ -265,12 +265,6 @@ export function AddComment({
                     </Button>
                 </div>
             </div>
-
-            {showTimestamp && currentTimestamp !== undefined && (
-                <div className="text-xs text-muted-foreground">
-                    Bình luận sẽ được gắn với thời điểm {formatTime(currentTimestamp)}
-                </div>
-            )}
         </form>
     )
 }
