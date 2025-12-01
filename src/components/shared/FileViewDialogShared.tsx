@@ -832,6 +832,7 @@ export function FileViewDialogShared({
                           type="file"
                           ref={fileInputRef}
                           className="hidden"
+                          aria-label="Upload new version"
                           onChange={(e) => {
                             const uploadedFile = e.target.files?.[0]
                             if (uploadedFile && onUploadNewVersion) {
@@ -1079,8 +1080,7 @@ export function FileViewDialogShared({
           {/* Comments Sidebar - Fullscreen Mode (Absolutely Positioned) */}
           {showComments && isVideoFullscreen && (
             <div
-              className="fixed top-0 right-0 w-[25vw] h-screen flex flex-col bg-background border-l border-border z-50"
-              style={{ left: '75vw' }}
+              className="fixed top-0 right-0 left-[75vw] w-[25vw] h-screen flex flex-col bg-background border-l border-border z-50"
             >
               <div className="flex-1 overflow-y-auto p-4">
                 <CommentsList

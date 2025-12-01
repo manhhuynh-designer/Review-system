@@ -96,7 +96,7 @@ export function ProjectCreateDialog() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Mô tả</Label>
+              <Label htmlFor="description">Mô tả <span className="text-xs text-muted-foreground">(Tùy chọn)</span></Label>
               <Textarea
                 id="description"
                 value={description}
@@ -107,7 +107,7 @@ export function ProjectCreateDialog() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="client">Khách hàng</Label>
+              <Label htmlFor="client">Khách hàng <span className="text-xs text-muted-foreground">(Tùy chọn)</span></Label>
               <div className="flex gap-2">
                 <Select value={clientId} onValueChange={setClientId}>
                   <SelectTrigger className="flex-1">
@@ -140,7 +140,7 @@ export function ProjectCreateDialog() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="deadline">Deadline</Label>
+              <Label htmlFor="deadline">Deadline <span className="text-xs text-muted-foreground">(Tùy chọn)</span></Label>
               <Input
                 id="deadline"
                 type="date"
@@ -150,7 +150,7 @@ export function ProjectCreateDialog() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tags">Tags</Label>
+              <Label htmlFor="tags">Tags <span className="text-xs text-muted-foreground">(Tùy chọn)</span></Label>
               <Input
                 id="tags"
                 value={tags}

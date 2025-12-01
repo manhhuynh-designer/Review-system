@@ -11,8 +11,17 @@ service cloud.firestore {
       // Public read (for review links)
       allow read: if true;
 
-      // Only authenticated admins can write
-      allow create, update, delete: if isAuthenticated();
+      // Only authenticated admins can create with required name field
+      allow create: if isAuthenticated() 
+        && request.resource.data.name is string 
+        && request.resource.data.name.size() > 0;
+
+      // Only authenticated admins can update
+      allow update: if isAuthenticated()
+        && (request.resource.data.name is string && request.resource.data.name.size() > 0);
+
+      // Only authenticated admins can delete
+      allow delete: if isAuthenticated();
 
       // Files subcollection
       match /files/{fileId} {
@@ -35,8 +44,22 @@ service cloud.firestore {
 
     // Clients collection
     match /clients/{clientId} {
-      // Only authenticated admins can read/write their own clients
-      allow read, write: if isAuthenticated() && request.auth.uid != null;
+      // Only authenticated admins can read their own clients
+      allow read: if isAuthenticated() && request.auth.uid != null;
+
+      // Only authenticated admins can create with required name field
+      allow create: if isAuthenticated() 
+        && request.auth.uid != null
+        && request.resource.data.name is string 
+        && request.resource.data.name.size() > 0;
+
+      // Only authenticated admins can update with name validation
+      allow update: if isAuthenticated() 
+        && request.auth.uid != null
+        && (request.resource.data.name is string && request.resource.data.name.size() > 0);
+
+      // Only authenticated admins can delete
+      allow delete: if isAuthenticated() && request.auth.uid != null;
     }
 
     // Notifications collection
