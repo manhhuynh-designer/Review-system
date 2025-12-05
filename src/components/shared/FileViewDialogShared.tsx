@@ -29,7 +29,8 @@ import {
   MoreHorizontal,
   Camera,
   Pencil,
-  Check
+  Check,
+  FileText
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -43,9 +44,10 @@ import { CommentsList } from '@/components/comments/CommentsList'
 import { ImageSequenceViewer } from '@/components/viewers/ImageSequenceViewer'
 import { CustomVideoPlayer, type CustomVideoPlayerRef } from '@/components/viewers/CustomVideoPlayer'
 import { VideoFrameControls } from '@/components/viewers/VideoFrameControls'
+import { PDFViewer } from '@/components/viewers/PDFViewer'
 import { AnnotationCanvasKonva } from '@/components/annotations/AnnotationCanvasKonva'
 import { AnnotationToolbar } from '@/components/annotations/AnnotationToolbar'
-import { linkifyText } from '@/lib/linkify'
+
 import type { AnnotationObject } from '@/types'
 import type { GLBViewerRef } from '@/components/viewers/GLBViewer'
 import { useFileStore } from '@/stores/files'
@@ -86,6 +88,7 @@ const getFileTypeIcon = (type: string) => {
   if (type === 'video') return <Video className="w-5 h-5 text-blue-500" />
   if (type === 'model') return <Box className="w-5 h-5 text-purple-500" />
   if (type === 'sequence') return <Film className="w-5 h-5 text-orange-500" />
+  if (type === 'pdf' || type.endsWith('.pdf')) return <FileText className="w-5 h-5 text-red-500" />
   return <FileImage className="w-5 h-5 text-gray-500" />
 }
 
@@ -94,6 +97,7 @@ const getFileTypeLabel = (type: string) => {
   if (type === 'video') return 'Video'
   if (type === 'model') return 'Mô hình 3D'
   if (type === 'sequence') return 'Image Sequence'
+  if (type === 'pdf' || type.endsWith('.pdf')) return 'PDF'
   return 'Tệp tin'
 }
 
@@ -154,6 +158,10 @@ export function FileViewDialogShared({
   const [isPlaying, setIsPlaying] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  const [pdfPage, setPdfPage] = useState(1)
+
+  // File store for sequence frame operations
+  const { reorderSequenceFrames, deleteSequenceFrames } = useFileStore()
 
   // Memoize video player callbacks to prevent CustomVideoPlayer re-renders
   const handleTimeUpdate = useCallback((time: number) => {
@@ -208,7 +216,7 @@ export function FileViewDialogShared({
   )
 
   // Filter comments based on current time/frame if enabled
-  const fileComments = showOnlyCurrentTimeComments && (file.type === 'video' || file.type === 'sequence')
+  const fileComments = showOnlyCurrentTimeComments && (file.type === 'video' || file.type === 'sequence' || file.type === 'pdf')
     ? allFileComments.filter(c => {
       if (c.timestamp === null || c.timestamp === undefined) return false
 
@@ -219,6 +227,9 @@ export function FileViewDialogShared({
       } else if (file.type === 'sequence') {
         // Exact frame match
         return c.timestamp === currentFrame
+      } else if (file.type === 'pdf') {
+        // Exact page match
+        return c.timestamp === pdfPage
       }
       return true
     })
@@ -229,7 +240,7 @@ export function FileViewDialogShared({
     // Only auto-manage annotations if we are NOT in editing mode (creating new annotation)
     // We allow auto-switching if we are currently not annotating OR if we are in read-only mode (viewing)
     if (!isAnnotating || isReadOnly) {
-      if (file.type === 'video' || file.type === 'sequence') {
+      if (file.type === 'video' || file.type === 'sequence' || file.type === 'pdf') {
         // Find comments at the current time that have annotation data
         const matchingComments = allFileComments.filter(c => {
           if (c.timestamp === null || c.timestamp === undefined || !c.annotationData) return false
@@ -238,9 +249,12 @@ export function FileViewDialogShared({
             // Tolerance: 0.1s or 1 frame (whichever is larger to be safe, but small enough to be precise)
             const tolerance = Math.max(0.1, 1 / videoFps)
             return Math.abs(c.timestamp - currentTime) <= tolerance
-          } else {
+          } else if (file.type === 'sequence') {
             return c.timestamp === currentFrame
+          } else if (file.type === 'pdf') {
+            return c.timestamp === pdfPage
           }
+          return false
         })
 
         if (matchingComments.length > 0) {
@@ -276,6 +290,9 @@ export function FileViewDialogShared({
     } else if (file.type === 'sequence') {
       // For sequences, timestamp represents frame number
       setCurrentFrame(Math.floor(timestamp))
+    } else if (file.type === 'pdf') {
+      // For PDF, timestamp represents page number
+      setPdfPage(Math.floor(timestamp))
     }
   }
 
@@ -340,6 +357,9 @@ export function FileViewDialogShared({
           } else if (file.type === 'sequence') {
             console.log('🖼️ Setting frame to:', Math.floor(comment.timestamp))
             setCurrentFrame(Math.floor(comment.timestamp))
+          } else if (file.type === 'pdf') {
+            console.log('📄 Setting page to:', Math.floor(comment.timestamp))
+            setPdfPage(Math.floor(comment.timestamp))
           }
         }
       } else {
@@ -482,6 +502,30 @@ export function FileViewDialogShared({
             <div className="text-4xl mb-2">📄</div>
             <div>Không thể tải file</div>
           </div>
+        </div>
+      )
+    }
+
+    // Check if file is PDF (either by type or extension/mime)
+    const isPdf = file.type === 'pdf' ||
+      file.name.toLowerCase().endsWith('.pdf') ||
+      current?.metadata?.type === 'application/pdf'
+
+    if (isPdf) {
+      return (
+        <div className="relative h-full min-h-[500px] w-full bg-muted/20">
+          <PDFViewer
+            url={effectiveUrl}
+            currentPage={pdfPage}
+            onPageChange={(page) => {
+              setPdfPage(page)
+              // Update currentFrame for comment filtering (using page as timestamp)
+              setCurrentFrame(page)
+            }}
+            className="w-full h-full"
+          >
+            {renderAnnotationOverlay()}
+          </PDFViewer>
         </div>
       )
     }
@@ -674,19 +718,11 @@ export function FileViewDialogShared({
               >
                 <ChevronRight className="h-6 w-6" />
               </Button>
-
-              {/* Caption Overlay */}
-              {effectiveFrameCaptions?.[sequenceContext.currentFrameIndex] && !isAnnotating && (
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
-                  <div className="bg-background/90 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-lg max-w-[80%] text-center pointer-events-auto">
-                    <p className="text-sm">{linkifyText(effectiveFrameCaptions[sequenceContext.currentFrameIndex])}</p>
-                  </div>
-                </div>
-              )}
             </>
-          )}
+          )
+          }
 
-        </div>
+        </div >
       )
     }
 
@@ -734,6 +770,12 @@ export function FileViewDialogShared({
             }}
             onFrameDetailView={(frame) => {
               setFrameDetailView(frame)
+            }}
+            onReorderFrames={async (newOrder) => {
+              await reorderSequenceFrames(file.projectId, file.id, current.version, newOrder)
+            }}
+            onDeleteFrames={async (indices) => {
+              await deleteSequenceFrames(file.projectId, file.id, current.version, indices)
             }}
           />
         </div>
@@ -929,6 +971,8 @@ export function FileViewDialogShared({
         </div>
       )
     }
+
+
 
     return (
       <div className="flex items-center justify-center h-[50vh] bg-muted/20">

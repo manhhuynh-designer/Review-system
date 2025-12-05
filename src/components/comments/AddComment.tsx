@@ -166,7 +166,7 @@ export function AddComment({
                 />
             )}
 
-            <div className="relative">
+            <div className="space-y-2">
                 <Textarea
                     ref={textareaRef}
                     placeholder={showTimestamp && currentTimestamp !== undefined
@@ -179,12 +179,12 @@ export function AddComment({
                     onDragOver={handleDragOver}
                     required
                     rows={3}
-                    className="text-sm resize-none pr-24"
+                    className="text-sm resize-none min-h-[80px]"
                 />
 
                 {/* Attachment Previews */}
                 {attachments.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {attachments.map(attachment => (
                             <div key={attachment.id} className="relative group">
                                 {attachment.type === 'image' ? (
@@ -224,62 +224,66 @@ export function AddComment({
                     </div>
                 )}
 
-                <div className="absolute bottom-2 right-2 flex items-center gap-1">
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,.pdf,.txt,.doc,.docx"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                        aria-label="Chọn file đính kèm"
-                    />
+                {/* Action Bar */}
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1">
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf,.txt,.doc,.docx"
+                            onChange={handleFileSelect}
+                            className="hidden"
+                            aria-label="Chọn file đính kèm"
+                        />
 
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="h-8 px-2"
-                        title="Đính kèm file"
-                    >
-                        <Image className="w-3 h-3" />
-                    </Button>
-
-                    {canCaptureView && (
                         <Button
                             type="button"
                             size="sm"
-                            variant={captureView ? 'secondary' : 'ghost'}
-                            onClick={() => setCaptureView(!captureView)}
-                            className="h-8 px-2"
-                            title={captureView ? 'Đã lưu góc nhìn' : 'Lưu góc nhìn hiện tại'}
+                            variant="ghost"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                            title="Đính kèm file"
                         >
-                            <Camera className="w-3 h-3 mr-1" />
-                            {captureView ? 'Đã lưu' : 'Góc nhìn'}
+                            <Image className="w-4 h-4" />
                         </Button>
-                    )}
 
-                    {onAnnotationClick && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={hasAnnotations ? 'secondary' : 'ghost'}
-                            onClick={onAnnotationClick}
-                            className="h-8 px-2"
-                            title={hasAnnotations ? `${annotationData.length} annotations` : 'Add annotation'}
-                        >
-                            <PenTool className="w-3 h-3 mr-1" />
-                            {hasAnnotations ? 'Đã vẽ' : 'Ghi chú'}
-                        </Button>
-                    )}
+                        {canCaptureView && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={captureView ? 'secondary' : 'ghost'}
+                                onClick={() => setCaptureView(!captureView)}
+                                className={`h-8 px-2 ${!captureView ? 'text-muted-foreground hover:text-foreground' : ''}`}
+                                title={captureView ? 'Đã lưu góc nhìn' : 'Lưu góc nhìn hiện tại'}
+                            >
+                                <Camera className="w-4 h-4 mr-1" />
+                                {captureView && <span className="text-xs">Đã lưu</span>}
+                            </Button>
+                        )}
+
+                        {onAnnotationClick && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={hasAnnotations ? 'secondary' : 'ghost'}
+                                onClick={onAnnotationClick}
+                                className={`h-8 px-2 ${!hasAnnotations ? 'text-muted-foreground hover:text-foreground' : ''}`}
+                                title={hasAnnotations ? `${annotationData.length} annotations` : 'Add annotation'}
+                            >
+                                <PenTool className="w-4 h-4 mr-1" />
+                                {hasAnnotations && <span className="text-xs">Đã vẽ</span>}
+                            </Button>
+                        )}
+                    </div>
+
                     <Button
                         type="submit"
                         size="sm"
                         disabled={submitting || !userName.trim() || (!content.trim() && attachments.length === 0)}
-                        className="h-8 px-3"
+                        className="h-8 px-4"
                     >
-                        <Send className="w-3 h-3" />
+                        <Send className="w-3 h-3 mr-2" />
                         Gửi
                     </Button>
                 </div>

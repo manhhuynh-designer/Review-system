@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
-import { Play, Pause, SkipBack, SkipForward, Repeat, Film, Images, Grid3x3, Edit2, Check, X as XIcon, Maximize2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Repeat, Film, Images, Grid3x3, Edit2, Check, X as XIcon, Maximize2, GripVertical, Trash2, Settings } from 'lucide-react'
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -10,6 +10,25 @@ import { linkifyText } from '@/lib/linkify'
 import { AnnotationCanvasKonva } from '@/components/annotations/AnnotationCanvasKonva'
 import { AnnotationToolbar } from '@/components/annotations/AnnotationToolbar'
 import type { AnnotationObject } from '@/types'
+
+// DnD Kit imports
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface ImageSequenceViewerProps {
   urls: string[]
@@ -40,6 +59,9 @@ interface ImageSequenceViewerProps {
   onStartAnnotating?: (frame: number) => void
   // Grid frame detail view
   onFrameDetailView?: (frameIndex: number) => void
+  // Grid edit mode callbacks (admin only)
+  onReorderFrames?: (newOrder: number[]) => void
+  onDeleteFrames?: (indices: number[]) => void
 }
 
 type ViewMode = 'video' | 'carousel' | 'grid'
@@ -71,7 +93,10 @@ export function ImageSequenceViewer({
   canUndoAnnotation = false,
   canRedoAnnotation = false,
   onStartAnnotating: _onStartAnnotating,
-  onFrameDetailView
+  onFrameDetailView,
+  // Grid edit mode callbacks
+  onReorderFrames,
+  onDeleteFrames
 }: ImageSequenceViewerProps) {
   const [currentFrame, setCurrentFrame] = useState(externalCurrentFrame !== undefined ? externalCurrentFrame : 0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -79,8 +104,77 @@ export function ImageSequenceViewer({
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
   const [imagesLoaded, setImagesLoaded] = useState(false)
   const [loadedCount, setLoadedCount] = useState(0)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const frameCount = urls.length
+
+  // Ref to track viewMode for tick callback
+  const viewModeRef = useRef(viewMode)
+  useEffect(() => {
+    viewModeRef.current = viewMode
+  }, [viewMode])
+
+  // Grid edit mode state (admin only)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<number>>(new Set())
+  const [frameOrder, setFrameOrder] = useState<number[]>(() => urls.map((_, i) => i))
+
+  // Update frame order when urls change
+  useEffect(() => {
+    setFrameOrder(urls.map((_, i) => i))
+    setSelectedForDelete(new Set())
+  }, [urls])
+
+  // DnD Kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // Handle drag end
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setFrameOrder((items) => {
+        const oldIndex = items.indexOf(active.id as number)
+        const newIndex = items.indexOf(over.id as number)
+        const newOrder = arrayMove(items, oldIndex, newIndex)
+        onReorderFrames?.(newOrder)
+        return newOrder
+      })
+    }
+  }, [onReorderFrames])
+
+  // Handle delete selected
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedForDelete.size > 0) {
+      onDeleteFrames?.(Array.from(selectedForDelete))
+      setSelectedForDelete(new Set())
+    }
+  }, [selectedForDelete, onDeleteFrames])
+
+  // Toggle frame selection for delete
+  const toggleFrameSelection = useCallback((index: number) => {
+    setSelectedForDelete(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      return newSet
+    })
+  }, [])
+
+  // Refs for fast-image-sequence
+  const sequenceContainerRef = useRef<HTMLDivElement>(null)
+  const sequenceRef = useRef<any>(null)
+  const isSequenceReady = useRef(false)
 
   // Sync with external currentFrame if provided
   useEffect(() => {
@@ -117,34 +211,85 @@ export function ImageSequenceViewer({
     })
   }, [urls])
 
-  // Handle animation loop
+  // Initialize fast-image-sequence
   useEffect(() => {
-    if (isPlaying && viewMode === 'video' && imagesLoaded) {
-      intervalRef.current = setInterval(() => {
-        setCurrentFrame((prev) => {
-          const next = prev + 1
-          if (next >= frameCount) {
-            if (isLooping) {
-              return 0
-            }
-            setIsPlaying(false)
-            return prev
-          }
-          return next
+    if (viewMode !== 'video' || !sequenceContainerRef.current || frameCount === 0) {
+      return
+    }
+
+    let sequence: any = null
+
+    const initSequence = async () => {
+      try {
+        const { FastImageSequence } = await import('@mediamonks/fast-image-sequence')
+
+        if (!sequenceContainerRef.current) return
+
+        // Clear container
+        sequenceContainerRef.current.innerHTML = ''
+
+        sequence = new FastImageSequence(sequenceContainerRef.current, {
+          frames: frameCount,
+          src: {
+            imageURL: (index: number) => urls[index] || urls[0],
+          },
+          loop: isLooping,
+          objectFit: 'contain',
         })
-      }, 1000 / fps)
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+
+        sequenceRef.current = sequence
+        isSequenceReady.current = true
+
+        // Register tick callback to sync frame - only update when in video mode
+        sequence.tick(() => {
+          // Check if sequence still exists (might be null after cleanup)
+          if (!sequence) return
+          // Only sync frame from library when in video mode (use ref to get current value)
+          if (viewModeRef.current !== 'video') return
+          const progress = sequence.progress
+          const frame = Math.round(progress * (frameCount - 1))
+          setCurrentFrame(frame)
+        })
+      } catch (error) {
+        console.error('Error initializing FastImageSequence:', error)
       }
     }
 
+    initSequence()
+
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+      if (sequence) {
+        try {
+          sequence.stop()
+          sequence = null
+        } catch (e) {
+          // Ignore cleanup errors
+        }
       }
+      sequenceRef.current = null
+      isSequenceReady.current = false
     }
-  }, [isPlaying, isLooping, frameCount, fps, viewMode, imagesLoaded])
+  }, [viewMode, frameCount, urls, isLooping])
+
+  // Handle play/pause with library
+  useEffect(() => {
+    const sequence = sequenceRef.current
+    if (!sequence || !isSequenceReady.current) return
+
+    if (isPlaying && viewMode === 'video' && imagesLoaded) {
+      sequence.play(fps)
+    } else {
+      sequence.stop()
+    }
+  }, [isPlaying, viewMode, imagesLoaded, fps])
+
+  // Sync frame to library when changed externally (only in video mode)
+  useEffect(() => {
+    const sequence = sequenceRef.current
+    if (!sequence || !isSequenceReady.current || isPlaying || viewMode !== 'video') return
+
+    sequence.progress = currentFrame / (frameCount - 1)
+  }, [currentFrame, frameCount, isPlaying, viewMode])
 
   // Notify parent of frame changes
   useEffect(() => {
@@ -297,12 +442,25 @@ export function ImageSequenceViewer({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         >
-          <img
-            src={urls[currentFrame]}
-            alt={`Frame ${currentFrame + 1}`}
-            className="w-full h-full object-contain max-h-[55dvh] xl:max-h-[50dvh] 2xl:max-h-[45dvh] select-none"
-            draggable={false}
-          />
+          {/* Fast Image Sequence Canvas - Video Mode Only */}
+          {viewMode === 'video' && (
+            <div
+              ref={sequenceContainerRef}
+              className="w-full h-full max-h-[55dvh] xl:max-h-[50dvh] 2xl:max-h-[45dvh]"
+              style={{ position: 'relative' }}
+            />
+          )}
+
+          {/* Regular Image - Carousel Mode */}
+          {viewMode === 'carousel' && (
+            <img
+              src={urls[currentFrame]}
+              alt={`Frame ${currentFrame + 1}`}
+              className="w-full h-full object-contain max-h-[55dvh] xl:max-h-[50dvh] 2xl:max-h-[45dvh] select-none"
+              draggable={false}
+            />
+          )}
+
           <div className="absolute top-4 left-4 bg-background/90 backdrop-blur-sm border border-border/50 px-3 py-1.5 rounded-md text-sm font-mono pointer-events-none z-10">
             Frame {currentFrame + 1} / {frameCount}
           </div>
@@ -313,14 +471,6 @@ export function ImageSequenceViewer({
               Scrubbing...
             </div>
           )}
-
-          {/* Progress bar */}
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-background/20 pointer-events-none">
-            <div
-              className="h-full bg-primary transition-all duration-75"
-              style={{ width: `${((currentFrame + 1) / frameCount) * 100}%` }}
-            />
-          </div>
 
           {/* Annotation overlay for video/carousel modes only */}
           {isAnnotating && (
@@ -545,28 +695,98 @@ export function ImageSequenceViewer({
       ) : (
         /* Grid Mode */
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 relative viewport">
-          {/* Grid Layout */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {urls.map((url, index) => (
-              <GridFrameCard
-                key={index}
-                url={url}
-                frameNumber={index}
-                frameCount={frameCount}
-                caption={frameCaptions[index]}
-                isSelected={currentFrame === index}
-                isAdmin={isAdmin}
-                onSelect={() => {
-                  setCurrentFrame(index)
-                  onFrameChange?.(index)
-                }}
-                onViewDetail={() => {
-                  onFrameDetailView?.(index)
-                }}
-                onCaptionChange={(caption) => onCaptionChange?.(file.id, file.currentVersion, index, caption)}
-              />
-            ))}
-          </div>
+          {/* Edit Mode Toggle (Admin only) */}
+          {isAdmin && (
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-background/95 backdrop-blur-sm py-2 z-10">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={isEditMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setIsEditMode(!isEditMode)
+                    setSelectedForDelete(new Set())
+                  }}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {isEditMode ? 'Thoát chỉnh sửa' : 'Chỉnh sửa'}
+                </Button>
+                {isEditMode && (
+                  <span className="text-xs text-muted-foreground">
+                    Kéo thả để sắp xếp lại • Click để chọn xoá
+                  </span>
+                )}
+              </div>
+              {isEditMode && selectedForDelete.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Xoá {selectedForDelete.size} hình
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Grid Layout with DnD */}
+          {isEditMode && isAdmin ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={frameOrder} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {frameOrder.map((originalIndex) => (
+                    <SortableGridFrameCard
+                      key={originalIndex}
+                      id={originalIndex}
+                      url={urls[originalIndex]}
+                      frameNumber={originalIndex}
+                      frameCount={frameCount}
+                      caption={frameCaptions[originalIndex]}
+                      isSelected={currentFrame === originalIndex}
+                      isSelectedForDelete={selectedForDelete.has(originalIndex)}
+                      isAdmin={isAdmin}
+                      isEditMode={true}
+                      onSelect={() => {
+                        setCurrentFrame(originalIndex)
+                        onFrameChange?.(originalIndex)
+                      }}
+                      onViewDetail={() => {
+                        onFrameDetailView?.(originalIndex)
+                      }}
+                      onCaptionChange={(caption) => onCaptionChange?.(file.id, file.currentVersion, originalIndex, caption)}
+                      onToggleDelete={() => toggleFrameSelection(originalIndex)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {urls.map((url, index) => (
+                <GridFrameCard
+                  key={index}
+                  url={url}
+                  frameNumber={index}
+                  frameCount={frameCount}
+                  caption={frameCaptions[index]}
+                  isSelected={currentFrame === index}
+                  isAdmin={isAdmin}
+                  onSelect={() => {
+                    setCurrentFrame(index)
+                    onFrameChange?.(index)
+                  }}
+                  onViewDetail={() => {
+                    onFrameDetailView?.(index)
+                  }}
+                  onCaptionChange={(caption) => onCaptionChange?.(file.id, file.currentVersion, index, caption)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -700,6 +920,111 @@ function GridFrameCard({
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// Sortable Grid Frame Card Component (with drag-and-drop support)
+function SortableGridFrameCard({
+  id,
+  url,
+  frameNumber,
+  frameCount,
+  caption,
+  isSelected,
+  isSelectedForDelete,
+  isAdmin: _isAdmin,
+  isEditMode: _isEditMode,
+  onSelect,
+  onViewDetail: _onViewDetail,
+  onCaptionChange: _onCaptionChange,
+  onToggleDelete
+}: {
+  id: number
+  url: string
+  frameNumber: number
+  frameCount: number
+  caption?: string
+  isSelected: boolean
+  isSelectedForDelete: boolean
+  isAdmin: boolean
+  isEditMode: boolean
+  onSelect: () => void
+  onViewDetail: () => void
+  onCaptionChange?: (caption: string) => void
+  onToggleDelete: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group relative rounded-lg overflow-hidden border-2 transition-all ${isSelectedForDelete
+        ? 'border-destructive ring-2 ring-destructive/20 shadow-lg'
+        : isSelected
+          ? 'border-primary ring-2 ring-primary/20 shadow-lg'
+          : 'border-border hover:border-primary/50 hover:shadow-md'
+        }`}
+    >
+      {/* Drag Handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute top-2 right-2 z-20 bg-background/90 backdrop-blur-sm border border-border/50 p-1.5 rounded cursor-grab active:cursor-grabbing hover:bg-muted transition-colors"
+      >
+        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      </div>
+
+      {/* Delete Selection Checkbox */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleDelete()
+        }}
+        className={`absolute top-2 left-2 z-20 w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${isSelectedForDelete
+          ? 'bg-destructive border-destructive text-destructive-foreground'
+          : 'bg-background/90 border-border hover:border-primary'
+          }`}
+      >
+        {isSelectedForDelete && <Check className="w-4 h-4" />}
+      </button>
+
+      {/* Image */}
+      <button
+        onClick={onSelect}
+        className="w-full aspect-square relative overflow-hidden bg-muted/20 group/image"
+      >
+        <img
+          src={url}
+          alt={`Frame ${frameNumber + 1}`}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-2 left-2 bg-background/90 backdrop-blur-sm border border-border/50 px-2 py-1 rounded text-xs font-mono">
+          {String(frameNumber + 1).padStart(3, '0')} / {String(frameCount).padStart(3, '0')}
+        </div>
+      </button>
+
+      {/* Compact Caption Preview */}
+      <div className="p-2 bg-background">
+        <p className="text-xs text-muted-foreground line-clamp-1">
+          {caption || <span className="italic text-muted-foreground/50">Chưa có chú thích</span>}
+        </p>
       </div>
     </div>
   )

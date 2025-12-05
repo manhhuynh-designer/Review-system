@@ -23,13 +23,15 @@ export function DeleteFileDialog({ open, onOpenChange, onConfirm, fileName, load
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Xác nhận xóa file</AlertDialogTitle>
-          <AlertDialogDescription className="space-y-2">
-            <p>
-              Bạn có chắc chắn muốn xóa file <span className="font-semibold">"{fileName}"</span> không?
-            </p>
-            <p className="text-destructive font-medium">
-              ⚠️ Hành động này không thể hoàn tác. Tất cả phiên bản và bình luận liên quan sẽ bị xóa vĩnh viễn.
-            </p>
+          <AlertDialogDescription asChild className="space-y-2">
+            <div>
+              <p>
+                Bạn có chắc chắn muốn xóa file <span className="font-semibold">"{fileName}"</span> không?
+              </p>
+              <p className="text-destructive font-medium">
+                ⚠️ Hành động này không thể hoàn tác. Tất cả phiên bản và bình luận liên quan sẽ bị xóa vĩnh viễn.
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

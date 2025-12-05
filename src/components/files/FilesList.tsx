@@ -24,6 +24,7 @@ const getFileTypeLabel = (type: string) => {
   if (type === 'image') return 'Hình ảnh'
   if (type === 'video') return 'Video'
   if (type === 'model') return 'Mô hình 3D'
+  if (type === 'pdf') return 'PDF'
   return 'Tệp tin'
 }
 

@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ArrowUpDown, Calendar, FileType, Download, Search, X, Share2, Check } from 'lucide-react'
 import type { Project } from '@/types'
 import { toast } from 'react-hot-toast'
+import { ProjectEditDialog } from '@/components/projects/ProjectEditDialog'
 
 type SortOption = 'name' | 'date' | 'type' | 'size'
 type SortDirection = 'asc' | 'desc'
@@ -86,7 +87,9 @@ export default function ProjectDetailPage() {
           <h1 className="text-2xl font-bold">{project.name}</h1>
           <p className="text-sm text-muted-foreground mt-1">Trạng thái: {project.status}</p>
         </div>
+
         <div className="flex items-center gap-2">
+          <ProjectEditDialog project={project} />
           <Button
             variant="outline"
             onClick={handleCopyReviewLink}

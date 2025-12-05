@@ -41,7 +41,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
     project.deadline ? new Date(project.deadline.toMillis()).toISOString().split('T')[0] : ''
   )
   const [tags, setTags] = useState(project.tags?.join(', ') || '')
-  
+
   const { updateProject, loading } = useProjectStore()
   const { clients, subscribeToClients } = useClientStore()
   const user = useAuthStore(s => s.user)
@@ -58,7 +58,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
 
     try {
       const selectedClient = clientId && clientId !== 'none' ? clients.find(c => c.id === clientId) : null
-      
+
       const updateData: Partial<Project> = {
         name: name.trim(),
         description: description.trim() || undefined,
@@ -68,7 +68,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
         deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : undefined,
         tags: tags.trim() ? tags.split(',').map(t => t.trim()).filter(Boolean) : []
       }
-      
+
       await updateProject(project.id, updateData)
       setOpen(false)
     } catch (error) {
@@ -89,8 +89,9 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
               Chỉnh sửa
             </DropdownMenuItem>
           ) : (
-            <Button variant="ghost" size="icon">
-              <Pencil className="h-4 w-4" />
+            <Button variant="outline">
+              <Pencil className="h-4 w-4 mr-2" />
+              Chỉnh sửa
             </Button>
           )}
         </DialogTrigger>

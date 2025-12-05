@@ -17,13 +17,13 @@ import type { Unsubscribe } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
 import { createNotification } from '../lib/notifications'
-import type { File as FileType, FileVersion } from '../types'
+import type { File as FileModel, FileType, FileVersion } from '../types'
 import { generateId } from '../lib/utils'
 import toast from 'react-hot-toast'
 
 interface FileState {
-  files: FileType[]
-  selectedFile: FileType | null
+  files: FileModel[]
+  selectedFile: FileModel | null
   uploading: boolean
   deleting: boolean
   error: string | null
@@ -34,12 +34,14 @@ interface FileState {
   uploadFile: (projectId: string, file: File, existingFileId?: string) => Promise<void>
   uploadSequence: (projectId: string, files: File[], name: string, fps?: number, existingFileId?: string) => Promise<void>
   deleteFile: (projectId: string, fileId: string) => Promise<void>
-  selectFile: (file: FileType | null) => void
+  selectFile: (file: FileModel | null) => void
   switchVersion: (fileId: string, version: number) => Promise<void>
   setSequenceViewMode: (projectId: string, fileId: string, mode: 'video' | 'carousel' | 'grid') => Promise<void>
   updateFrameCaption: (projectId: string, fileId: string, version: number, frameNumber: number, caption: string) => Promise<void>
   setModelThumbnail: (projectId: string, fileId: string, version: number, dataUrl: string, cameraState: { position: [number, number, number], target: [number, number, number] }) => Promise<void>
   renameFile: (projectId: string, fileId: string, newName: string) => Promise<void>
+  reorderSequenceFrames: (projectId: string, fileId: string, version: number, newOrder: number[]) => Promise<void>
+  deleteSequenceFrames: (projectId: string, fileId: string, version: number, indicesToDelete: number[]) => Promise<void>
   cleanup: () => void
 }
 
@@ -68,7 +70,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         id: doc.id,
         projectId,
         ...doc.data()
-      })) as FileType[]
+      })) as FileModel[]
 
       // Merge with existing files from other projects
       const currentFiles = get().files
@@ -102,9 +104,10 @@ export const useFileStore = create<FileState>((set, get) => ({
       console.log('📁 Generated fileId:', fileId)
 
       // Determine file type
-      let fileType: 'image' | 'video' | 'model' = 'image'
+      let fileType: FileType = 'image'
       if (file.type.startsWith('video/')) fileType = 'video'
       if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) fileType = 'model'
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) fileType = 'pdf'
       console.log('🏷️ File type determined:', fileType)
 
       // Get current version
@@ -138,6 +141,44 @@ export const useFileStore = create<FileState>((set, get) => ({
           type: file.type,
           name: file.name,
           lastModified: file.lastModified
+        }
+      }
+
+      // Generate thumbnail for PDF
+      if (fileType === 'pdf') {
+        try {
+          console.log('🖼️ Generating PDF thumbnail...')
+          // Dynamic import to avoid loading pdfjs if not needed
+          const pdfjs = await import('pdfjs-dist')
+          pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+
+          const arrayBuffer = await file.arrayBuffer()
+          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise
+          const page = await pdf.getPage(1)
+
+          const viewport = page.getViewport({ scale: 1 })
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d')
+          canvas.height = viewport.height
+          canvas.width = viewport.width
+
+          if (context) {
+            // @ts-ignore - render signature mismatch in types but works in runtime
+            await page.render({ canvasContext: context, viewport }).promise
+            const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7)
+
+            // Upload thumbnail
+            const thumbRef = ref(storage, `projects/${projectId}/${fileId}/v${currentVersion}/thumbnail.jpg`)
+            const thumbBlob = await (await fetch(thumbnailUrl)).blob()
+            await uploadBytes(thumbRef, thumbBlob)
+            const thumbUrl = await getDownloadURL(thumbRef)
+
+            newVersion.thumbnailUrl = thumbUrl
+            console.log('✅ PDF thumbnail generated and uploaded:', thumbUrl)
+          }
+        } catch (err) {
+          console.error('⚠️ Failed to generate PDF thumbnail:', err)
+          // Continue without thumbnail
         }
       }
       console.log('📝 Version metadata created:', newVersion)
@@ -200,7 +241,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     }
   },
 
-  selectFile: (file: FileType | null) => {
+  selectFile: (file: FileModel | null) => {
     set({ selectedFile: file })
   },
 
@@ -418,7 +459,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
       if (!fileDoc.exists()) throw new Error('File not found')
 
-      const data = fileDoc.data() as FileType
+      const data = fileDoc.data() as FileModel
       const versions = [...data.versions]
       const versionIndex = versions.findIndex(v => v.version === version)
 
@@ -464,7 +505,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
       if (!fileDoc.exists()) throw new Error('File not found')
 
-      const data = fileDoc.data() as FileType
+      const data = fileDoc.data() as FileModel
       const versions = [...data.versions]
       const versionIndex = versions.findIndex(v => v.version === version)
 
@@ -496,6 +537,104 @@ export const useFileStore = create<FileState>((set, get) => ({
     } catch (error: any) {
       console.error('Error renaming file:', error)
       toast.error('Lỗi khi đổi tên file: ' + error.message)
+      throw error
+    }
+  },
+
+  reorderSequenceFrames: async (projectId: string, fileId: string, version: number, newOrder: number[]) => {
+    try {
+      const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+      const fileDoc = await getDoc(fileRef)
+
+      if (!fileDoc.exists()) throw new Error('File not found')
+
+      const data = fileDoc.data() as FileModel
+      const versions = [...data.versions]
+      const versionIndex = versions.findIndex(v => v.version === version)
+
+      if (versionIndex >= 0 && versions[versionIndex].sequenceUrls) {
+        const currentVersion = versions[versionIndex]
+        const oldUrls = currentVersion.sequenceUrls || []
+        const oldCaptions = currentVersion.frameCaptions || {}
+
+        // Reorder URLs based on new order
+        const newUrls = newOrder.map(i => oldUrls[i])
+
+        // Reorder captions - need to map old frame numbers to new positions
+        const newCaptions: Record<number, string> = {}
+        newOrder.forEach((oldIndex, newIndex) => {
+          if (oldCaptions[oldIndex]) {
+            newCaptions[newIndex] = oldCaptions[oldIndex]
+          }
+        })
+
+        versions[versionIndex] = {
+          ...currentVersion,
+          sequenceUrls: newUrls,
+          url: newUrls[0], // Update thumbnail to first frame
+          frameCaptions: newCaptions
+        }
+
+        await updateDoc(fileRef, { versions })
+        toast.success('Đã sắp xếp lại thứ tự hình')
+      }
+    } catch (error: any) {
+      console.error('Failed to reorder sequence frames:', error)
+      toast.error('Lỗi sắp xếp lại thứ tự')
+      throw error
+    }
+  },
+
+  deleteSequenceFrames: async (projectId: string, fileId: string, version: number, indicesToDelete: number[]) => {
+    try {
+      const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+      const fileDoc = await getDoc(fileRef)
+
+      if (!fileDoc.exists()) throw new Error('File not found')
+
+      const data = fileDoc.data() as FileModel
+      const versions = [...data.versions]
+      const versionIndex = versions.findIndex(v => v.version === version)
+
+      if (versionIndex >= 0 && versions[versionIndex].sequenceUrls) {
+        const currentVersion = versions[versionIndex]
+        const oldUrls = currentVersion.sequenceUrls || []
+        const oldCaptions = currentVersion.frameCaptions || {}
+
+        // Filter out deleted frames
+        const indicesToDeleteSet = new Set(indicesToDelete)
+        const newUrls = oldUrls.filter((_, i) => !indicesToDeleteSet.has(i))
+
+        if (newUrls.length === 0) {
+          throw new Error('Không thể xóa tất cả hình trong sequence')
+        }
+
+        // Rebuild captions with new indices
+        const newCaptions: Record<number, string> = {}
+        let newIndex = 0
+        for (let oldIndex = 0; oldIndex < oldUrls.length; oldIndex++) {
+          if (!indicesToDeleteSet.has(oldIndex)) {
+            if (oldCaptions[oldIndex]) {
+              newCaptions[newIndex] = oldCaptions[oldIndex]
+            }
+            newIndex++
+          }
+        }
+
+        versions[versionIndex] = {
+          ...currentVersion,
+          sequenceUrls: newUrls,
+          url: newUrls[0], // Update thumbnail to first frame
+          frameCount: newUrls.length,
+          frameCaptions: newCaptions
+        }
+
+        await updateDoc(fileRef, { versions })
+        toast.success(`Đã xóa ${indicesToDelete.length} hình`)
+      }
+    } catch (error: any) {
+      console.error('Failed to delete sequence frames:', error)
+      toast.error('Lỗi xóa hình: ' + error.message)
       throw error
     }
   },

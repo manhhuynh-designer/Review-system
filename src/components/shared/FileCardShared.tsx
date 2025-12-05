@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { formatFileSize } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileImage, Video, Box, MessageSquare, Clock, Trash2, Film } from 'lucide-react'
+import { FileImage, Video, Box, MessageSquare, Clock, Trash2, Film, FileText } from 'lucide-react'
 
 interface Props {
   file: FileType
@@ -21,6 +21,7 @@ const getFileTypeIcon = (type: string, size: string = 'w-8 h-8') => {
   if (type === 'video') return <Video className={`${size} text-blue-500`} />
   if (type === 'model') return <Box className={`${size} text-purple-500`} />
   if (type === 'sequence') return <Film className={`${size} text-orange-500`} />
+  if (type === 'pdf') return <FileText className={`${size} text-red-500`} />
   return <FileImage className={`${size} text-gray-500`} />
 }
 
@@ -29,6 +30,7 @@ const getFileTypeLabel = (type: string) => {
   if (type === 'video') return 'Video'
   if (type === 'model') return 'Mô hình 3D'
   if (type === 'sequence') return 'Image Sequence'
+  if (type === 'pdf') return 'PDF'
   return 'Tệp tin'
 }
 
@@ -79,6 +81,17 @@ export function FileCardShared({ file, resolvedUrl, commentCount, onClick, onDel
     }
 
     if (file.type === 'model' && current?.thumbnailUrl && !imageError) {
+      return (
+        <img
+          src={current.thumbnailUrl}
+          alt={file.name}
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+        />
+      )
+    }
+
+    if (file.type === 'pdf' && current?.thumbnailUrl && !imageError) {
       return (
         <img
           src={current.thumbnailUrl}

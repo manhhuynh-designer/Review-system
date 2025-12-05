@@ -15,7 +15,7 @@ const MAX_SIZE = 200 * 1024 * 1024 // 200MB for GLB files
 const ALLOWED_TYPES = {
   // Images
   'image/jpeg': '.jpg',
-  'image/png': '.png', 
+  'image/png': '.png',
   'image/webp': '.webp',
   'image/gif': '.gif',
   // Videos
@@ -26,7 +26,9 @@ const ALLOWED_TYPES = {
   'model/gltf-binary': '.glb',
   'model/gltf+json': '.gltf',
   // Handle GLB files that might be detected as application/octet-stream
-  'application/octet-stream': '.glb'
+  'application/octet-stream': '.glb',
+  // Documents
+  'application/pdf': '.pdf'
 }
 
 export function FileUploader({ projectId, existingFileId, onUploadComplete }: FileUploaderProps) {
@@ -41,29 +43,29 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
     if (file.size > MAX_SIZE) {
       return `File quá lớn (${formatFileSize(file.size)}). Tối đa ${formatFileSize(MAX_SIZE)}.`
     }
-    
+
     // Special handling for GLB files (might be detected as application/octet-stream)
     const isGLB = file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')
     const hasValidType = Object.keys(ALLOWED_TYPES).includes(file.type)
-    
+
     if (!hasValidType && !isGLB) {
       const allowedExts = Object.values(ALLOWED_TYPES).join(', ')
       return `Định dạng không hỗ trợ. Chỉ chấp nhận: ${allowedExts}`
     }
-    
+
     // Additional validation for GLB files
     if (isGLB && file.size < 100) {
       return 'File GLB có vẻ không hợp lệ (quá nhỏ)'
     }
-    
+
     return null
   }
 
   const onSelect = async (file?: File) => {
     if (!file) return
-    
+
     console.log('📂 File selected:', { name: file.name, size: file.size, type: file.type })
-    
+
     setError(null)
     const validationError = validateFile(file)
     if (validationError) {
@@ -71,9 +73,9 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
       setError(validationError)
       return
     }
-    
+
     setSelectedFile(file)
-    
+
     try {
       console.log('🎯 Starting upload process...')
       await uploadFile(projectId, file, existingFileId)
@@ -149,25 +151,22 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
           </div>
         ) : (
           <div className="px-8 py-12 text-center">
-            <div className={`mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center transition-all ${
-              dragOver ? 'bg-primary/20 scale-110' : 'bg-muted/50'
-            }`}>
-              <Upload className={`w-8 h-8 transition-colors ${
-                dragOver ? 'text-primary' : 'text-muted-foreground'
-              }`} />
-            </div>
-            
-            <div className="mb-6">
-              <div className={`text-lg font-medium mb-2 transition-colors ${
-                dragOver ? 'text-primary' : 'text-foreground'
+            <div className={`mx-auto w-16 h-16 mb-4 rounded-full flex items-center justify-center transition-all ${dragOver ? 'bg-primary/20 scale-110' : 'bg-muted/50'
               }`}>
+              <Upload className={`w-8 h-8 transition-colors ${dragOver ? 'text-primary' : 'text-muted-foreground'
+                }`} />
+            </div>
+
+            <div className="mb-6">
+              <div className={`text-lg font-medium mb-2 transition-colors ${dragOver ? 'text-primary' : 'text-foreground'
+                }`}>
                 {existingFileId ? 'Tải phiên bản mới' : 'Kéo thả tệp tin vào đây'}
               </div>
               <div className="text-sm text-muted-foreground">
                 hoặc nhấn vào nút bên dưới để chọn file
               </div>
             </div>
-            
+
             {/* File Type Hints */}
             <div className="flex justify-center gap-6 mb-6">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -182,20 +181,24 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
                 <Box className="w-4 h-4 text-purple-500" />
                 <span>3D GLB</span>
               </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="w-4 h-4 flex items-center justify-center font-bold text-red-500 text-[10px] border border-red-500 rounded-[2px]">PDF</div>
+                <span>PDF</span>
+              </div>
             </div>
-            
+
             <input
               ref={inputRef}
               type="file"
-              accept="image/*,video/*,.glb,.gltf"
+              accept="image/*,video/*,.glb,.gltf,.pdf"
               className="hidden"
               aria-label={existingFileId ? 'Chọn file phiên bản mới' : 'Chọn file để tải lên'}
               onChange={onInputChange}
             />
-            
-            <Button 
+
+            <Button
               size="lg"
-              onClick={() => inputRef.current?.click()} 
+              onClick={() => inputRef.current?.click()}
               disabled={uploading}
               className={dragOver ? 'bg-primary' : ''}
             >
@@ -205,7 +208,7 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
           </div>
         )}
       </div>
-      
+
       {/* Status Messages */}
       {error && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
@@ -219,7 +222,7 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
           </Button>
         </div>
       )}
-      
+
       {!uploading && !error && selectedFile && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900/20">
           <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -229,11 +232,11 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
           </div>
         </div>
       )}
-      
+
       {/* File Info */}
       <div className="text-center">
         <div className="text-xs text-muted-foreground">
-          Hỗ trợ: JPG, PNG, WebP, GIF, MP4, MOV, WebM, GLB, GLTF • Tối đa {formatFileSize(MAX_SIZE)}
+          Hỗ trợ: JPG, PNG, WebP, GIF, MP4, MOV, WebM, GLB, GLTF, PDF • Tối đa {formatFileSize(MAX_SIZE)}
         </div>
       </div>
     </div>

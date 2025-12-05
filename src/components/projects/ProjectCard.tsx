@@ -11,7 +11,7 @@ import type { Project } from '@/types'
 import { ProjectEditDialog } from './ProjectEditDialog'
 import { ProjectDeleteDialog } from './ProjectDeleteDialog'
 import { formatFileSize } from '@/lib/utils'
-import { Calendar, User, Mail, AlertCircle, MoreVertical, Archive, ArchiveRestore, Image as ImageIcon, HardDrive } from 'lucide-react'
+import { Calendar, User, Mail, AlertCircle, MoreVertical, Archive, ArchiveRestore, Image as ImageIcon, HardDrive, Play } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +25,7 @@ type ViewMode = 'list' | 'thumbnails'
 export function ProjectCard({ project, viewMode = 'list' }: { project: Project; viewMode?: ViewMode }) {
   const updateProject = useProjectStore(s => s.updateProject)
   const navigate = useNavigate()
-  const { thumbnailUrl } = useProjectThumbnail(project.id)
+  const { thumbnailData } = useProjectThumbnail(project.id)
   const allFiles = useFileStore(s => s.files)
 
   const created = project.createdAt?.toDate ? project.createdAt.toDate() : new Date()
@@ -51,12 +51,34 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
       >
         {/* Thumbnail Image */}
         <div className="relative h-40 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center overflow-hidden">
-          {thumbnailUrl ? (
-            <img
-              src={thumbnailUrl}
-              alt={project.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
+          {thumbnailData ? (
+            thumbnailData.type === 'video' ? (
+              <div className="relative w-full h-full group-hover:scale-105 transition-transform duration-300 bg-black">
+                <video
+                  src={thumbnailData.url}
+                  className="w-full h-full object-cover opacity-90"
+                  muted
+                  loop
+                  playsInline
+                  onMouseOver={e => e.currentTarget.play()}
+                  onMouseOut={e => {
+                    e.currentTarget.pause();
+                    e.currentTarget.currentTime = 0;
+                  }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                    <Play className="w-5 h-5 text-white fill-current ml-0.5" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <img
+                src={thumbnailData.url}
+                alt={project.name}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            )
           ) : (
             <div className="flex flex-col items-center gap-2 text-primary/40">
               <ImageIcon className="h-12 w-12" />
@@ -237,6 +259,8 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
             Mở
           </Button>
 
+          <ProjectEditDialog project={project} />
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -244,8 +268,6 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <ProjectEditDialog project={project} triggerAsMenuItem />
-              <DropdownMenuSeparator />
               {project.status === 'active' ? (
                 <DropdownMenuItem onClick={() => updateProject(project.id, { status: 'archived' })}>
                   <Archive className="h-4 w-4 mr-2" />

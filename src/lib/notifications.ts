@@ -14,13 +14,13 @@ export async function createNotification(params: {
   adminEmail: string
 }) {
   console.log('📧 createNotification called with:', params)
-  
+
   try {
     // Get project name
     const projectDoc = await getDoc(doc(db, 'projects', params.projectId))
     const projectName = projectDoc.exists() ? projectDoc.data().name : 'Unknown Project'
     console.log('📁 Project name:', projectName)
-    
+
     // Get file name if fileId provided
     let fileName: string | undefined
     if (params.fileId) {
@@ -28,24 +28,24 @@ export async function createNotification(params: {
       fileName = fileDoc.exists() ? fileDoc.data().name : undefined
       console.log('📄 File name:', fileName)
     }
-    
+
     const notificationData = {
       type: params.type,
       projectId: params.projectId,
       projectName,
       fileId: params.fileId,
       fileName,
-      userName: params.userName,
+      userName: params.userName ?? null,
       message: params.message,
       isRead: false,
       createdAt: Timestamp.now(),
       adminEmail: params.adminEmail
     }
-    
+
     console.log('💾 Saving notification to Firestore:', notificationData)
-    
+
     const docRef = await addDoc(collection(db, 'notifications'), notificationData)
-    
+
     console.log('✅ Notification created successfully with ID:', docRef.id)
   } catch (error) {
     console.error('❌ Failed to create notification:', error)
