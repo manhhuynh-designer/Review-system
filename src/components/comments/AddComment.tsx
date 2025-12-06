@@ -21,6 +21,7 @@ interface AddCommentProps {
     annotationData?: any[] | null
     onAnnotationClick?: () => void
     canCaptureView?: boolean
+    isMobile?: boolean // Distinguish mobile from desktop for unique IDs
 }
 
 export function AddComment({
@@ -32,7 +33,8 @@ export function AddComment({
     isSequence = false,
     annotationData,
     onAnnotationClick,
-    canCaptureView
+    canCaptureView,
+    isMobile = false
 }: AddCommentProps) {
     const [userName, setUserName] = useState(initialUserName || '')
     const [content, setContent] = useState('')
@@ -238,6 +240,7 @@ export function AddComment({
                         />
 
                         <Button
+                            id={isMobile ? "mobile-comment-attach-button" : "comment-attach-button"}
                             type="button"
                             size="sm"
                             variant="ghost"
@@ -264,6 +267,7 @@ export function AddComment({
 
                         {onAnnotationClick && (
                             <Button
+                                id={isMobile ? "mobile-comment-draw-button" : "comment-draw-button"}
                                 type="button"
                                 size="sm"
                                 variant={hasAnnotations ? 'secondary' : 'ghost'}

@@ -344,7 +344,7 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
             {/* Custom Controls */}
             <div className="video-controls">
                 {/* Timeline with markers */}
-                <div className="timeline-wrapper" onClick={handleTimelineClick}>
+                <div id="video-timeline-container" className="timeline-wrapper" onClick={handleTimelineClick}>
                     <div className="timeline-track">
                         {/* Progress bar */}
                         <div className="timeline-progress" style={{ width: `${currentProgress}%` }} />
@@ -408,6 +408,8 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                                 value={playbackRate}
                                 onChange={(e) => handlePlaybackRateChange(Number(e.target.value))}
                                 className="speed-select"
+                                aria-label="Playback speed"
+                                title="Playback speed"
                             >
                                 <option value={0.25}>0.25x</option>
                                 <option value={0.5}>0.5x</option>
@@ -419,11 +421,10 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                             </select>
                         </div>
 
-                        <button onClick={handleExportFrame} className="control-btn" title="Xuất frame hiện tại">
+                        <button id="video-controls-export" onClick={handleExportFrame} className="control-btn" title="Xuất frame hiện tại">
                             <Camera className="w-5 h-5" />
                         </button>
-
-                        <button onClick={toggleFullscreen} className="control-btn" title="Fullscreen">
+                        <button id="video-controls-fullscreen" onClick={toggleFullscreen} className="control-btn" title="Fullscreen">
                             <Maximize className="w-5 h-5" />
                         </button>
                     </div>

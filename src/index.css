@@ -130,3 +130,9 @@
     border-color: hsl(var(--primary-foreground));
   }
 }
+
+/* When a guided tour is running, ensure 3D viewer toolbar stays visible */
+.tour-running .glb-toolbar {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}

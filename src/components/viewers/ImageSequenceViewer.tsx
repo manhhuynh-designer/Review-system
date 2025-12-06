@@ -400,7 +400,7 @@ export function ImageSequenceViewer({
               <Images className="w-4 h-4" />
               <span className="text-xs">Carousel</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="grid" aria-label="Grid mode" className="gap-2">
+            <ToggleGroupItem id="grid-toggle" value="grid" aria-label="Grid mode" className="gap-2">
               <Grid3x3 className="w-4 h-4" />
               <span className="text-xs">Grid</span>
             </ToggleGroupItem>
@@ -419,8 +419,10 @@ export function ImageSequenceViewer({
               </>
             ) : (
               <>
-                <Grid3x3 className="w-4 h-4" />
-                <span className="text-xs font-medium">Chế độ Grid</span>
+                <div id="grid-toggle" className="flex items-center gap-2">
+                  <Grid3x3 className="w-4 h-4" />
+                  <span className="text-xs font-medium">Chế độ Grid</span>
+                </div>
               </>
             )}
           </div>

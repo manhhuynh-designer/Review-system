@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { FileCardShared } from '@/components/shared/FileCardShared'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
+import { HelpCircle } from 'lucide-react'
+import { resetTourStatus } from '@/lib/fileTours'
 import {
   Dialog,
   DialogContent,
@@ -256,7 +258,21 @@ export default function ReviewPage() {
                 <span>{projectFiles.length} tệp tin</span>
               </div>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  resetTourStatus()
+                  alert('Đã reset trạng thái hướng dẫn. Mở file bất kỳ để xem hướng dẫn lại.')
+                }}
+                className="gap-2"
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span className="hidden sm:inline">Hướng dẫn</span>
+              </Button>
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </div>

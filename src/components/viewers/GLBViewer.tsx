@@ -298,9 +298,10 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
       {/* Floating Toolbar */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col sm:flex-row items-center gap-2 sm:gap-1">
         {/* Main Toolbar */}
-        <div className="flex items-center gap-1 p-1.5 rounded-full bg-background/90 backdrop-blur border shadow-lg transition-opacity opacity-0 group-hover:opacity-100">
+        <div className="glb-toolbar flex items-center gap-1 p-1.5 rounded-full bg-background/90 backdrop-blur border shadow-lg transition-opacity opacity-0 group-hover:opacity-100">
           <Button
             variant={autoRotate ? "secondary" : "ghost"}
+            id="model-auto-rotate"
             size="icon"
             className="h-8 w-8 rounded-full"
             onClick={() => setAutoRotate(!autoRotate)}
@@ -315,6 +316,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
+                id="model-render-mode"
                 variant={renderMode !== 'standard' ? "secondary" : "ghost"}
                 size="icon"
                 className="h-8 w-8 rounded-full"
@@ -355,6 +357,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
+                    id="model-camera-selector"
                     variant={selectedCamera !== 'default' ? "secondary" : "ghost"}
                     size="icon"
                     className="h-8 w-8 rounded-full"
@@ -385,6 +388,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
           <DropdownMenu open={showLightingPanel} onOpenChange={setShowLightingPanel}>
             <DropdownMenuTrigger asChild>
               <Button
+                id="model-lighting"
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-full"
@@ -396,8 +400,11 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
             <DropdownMenuContent align="center" className="w-64 p-3">
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium mb-2 block">Environment</label>
+                  <label htmlFor="env-preset-select" className="text-xs font-medium mb-2 block">Environment</label>
                   <select
+                    id="env-preset-select"
+                    aria-label="Environment preset"
+                    title="Environment preset"
                     className="w-full text-sm border border-border rounded px-2 py-1 bg-background text-foreground"
                     value={envPreset}
                     onChange={(e) => setEnvPreset(e.target.value)}
@@ -434,6 +441,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
           <div className="w-px h-4 bg-border mx-1" />
 
           <Button
+            id="model-bg-light"
             variant={bgMode === 'light' ? "secondary" : "ghost"}
             size="icon"
             className="h-8 w-8 rounded-full"
@@ -444,6 +452,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
           </Button>
 
           <Button
+            id="model-bg-dark"
             variant={bgMode === 'dark' ? "secondary" : "ghost"}
             size="icon"
             className="h-8 w-8 rounded-full"
@@ -456,6 +465,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
           <div className="w-px h-4 bg-border mx-1" />
 
           <Button
+            id="model-screenshot"
             variant="ghost"
             size="icon"
             className="h-8 w-8 rounded-full"
@@ -466,6 +476,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
           </Button>
 
           <Button
+            id="model-reset"
             variant="ghost"
             size="icon"
             className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive"

@@ -30,8 +30,10 @@ import {
   Camera,
   Pencil,
   Check,
-  FileText
+  FileText,
+  HelpCircle
 } from 'lucide-react'
+import { startFileTour, hasSeenTour } from '@/lib/fileTours'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -159,6 +161,30 @@ export function FileViewDialogShared({
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [pdfPage, setPdfPage] = useState(1)
+  const [commentWidth, setCommentWidth] = useState(350)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizingState = useRef({ startX: 0, startWidth: 350 })
+
+  // Tour Logic - delegated to fileTours module for better maintainability
+  const handleStartTour = () => {
+    if (!file) return
+    const isMobile = (typeof window !== 'undefined') && (window.matchMedia ? window.matchMedia('(max-width: 640px)').matches : window.innerWidth <= 640)
+    startFileTour({
+      fileType: file.type as any,
+      isMobile
+    })
+  }
+
+  useEffect(() => {
+    if (open && file) {
+      if (!hasSeenTour(file.type as any)) {
+        // Delay slightly to wait for dialog animation/render
+        setTimeout(() => {
+          handleStartTour()
+        }, 1000)
+      }
+    }
+  }, [open, file?.type])
 
   // File store for sequence frame operations
   const { reorderSequenceFrames, deleteSequenceFrames } = useFileStore()
@@ -431,6 +457,64 @@ export function FileViewDialogShared({
       setAnnotationHistoryIndex(newIndex)
       setAnnotationData(annotationHistory[newIndex])
     }
+  }
+
+  // Handle Resize Logic
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Calculate delta: moving left (negative delta) increases width
+      // We're resizing the right sidebar, so dragging left = larger
+      const delta = resizingState.current.startX - e.clientX
+      const newWidth = Math.min(800, Math.max(280, resizingState.current.startWidth + delta))
+      setCommentWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+
+      // Remove overlay if it exists (prevents iframe/video capturing mouse)
+      const overlay = document.getElementById('resize-overlay-guard')
+      if (overlay) overlay.remove()
+    }
+
+    // Add overlay to ensure smooth dragging over iframes/videos
+    if (!document.getElementById('resize-overlay-guard')) {
+      const overlay = document.createElement('div')
+      overlay.id = 'resize-overlay-guard'
+      overlay.style.position = 'fixed'
+      overlay.style.top = '0'
+      overlay.style.left = '0'
+      overlay.style.width = '100vw'
+      overlay.style.height = '100vh'
+      overlay.style.zIndex = '9999'
+      overlay.style.cursor = 'col-resize'
+      document.body.appendChild(overlay)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      const overlay = document.getElementById('resize-overlay-guard')
+      if (overlay) overlay.remove()
+    }
+  }, [isResizing])
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    resizingState.current = {
+      startX: e.clientX,
+      startWidth: commentWidth
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
   }
 
   // Image zoom level (applies to image + annotations)
@@ -901,6 +985,7 @@ export function FileViewDialogShared({
               {/* Mobile: Filter Toggle + Mode Toggle */}
               <div className="flex sm:hidden gap-1">
                 <Button
+                  id="mobile-nav-toggle"
                   variant={navMode === 'marker' ? 'secondary' : 'outline'}
                   size="sm"
                   onClick={() => setNavMode(navMode === 'frame' ? 'marker' : 'frame')}
@@ -912,6 +997,7 @@ export function FileViewDialogShared({
                 <Button
                   variant={showOnlyCurrentTimeComments ? 'secondary' : 'outline'}
                   size="sm"
+                  id="mobile-filter-toggle"
                   onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
                   className="h-8 px-2"
                   title="Lọc theo thời gian"
@@ -1207,6 +1293,17 @@ export function FileViewDialogShared({
               </div>
 
               {/* Compare Button (only for images) - Hidden on mobile */}
+              {/* Tour Button - Desktop */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden sm:flex h-8 w-8"
+                onClick={handleStartTour}
+                title="Hướng dẫn sử dụng"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </Button>
+
               {file.type === 'image' && file.versions.length > 1 && (
                 <Button
                   variant={compareMode ? 'secondary' : 'outline'}
@@ -1239,6 +1336,18 @@ export function FileViewDialogShared({
                 <span className="md:hidden">BL</span>
               </Button>
 
+              <div className="flex items-center sm:hidden ml-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleStartTour}
+                  title="Hướng dẫn"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </Button>
+              </div>
+
               <Button
                 variant="ghost"
                 size="icon"
@@ -1252,9 +1361,9 @@ export function FileViewDialogShared({
 
           <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
             {/* Main Content Area */}
-            <div className={`flex-1 overflow-auto bg-background/50 flex flex-col ${showComments && !isVideoFullscreen ? 'sm:border-r' : ''}`}>
+            <div className={`flex-1 overflow-auto bg-background/50 flex flex-col ${showComments && !isVideoFullscreen ? '' : ''}`}>
               {/* Toolbar for Annotation */}
-              <div className="p-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 gap-2">
+              <div id="annotation-toolbar" className="p-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 gap-2">
                 <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto">
                   {!isAnnotating ? (
                     <Button onClick={handleStartAnnotating} variant="outline" size="sm" className="gap-2 flex-1 sm:flex-initial">
@@ -1283,6 +1392,7 @@ export function FileViewDialogShared({
                     <Button
                       variant={showOnlyCurrentTimeComments ? 'secondary' : 'ghost'}
                       size="sm"
+                      id="filter-time-toggle"
                       onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
                       className={`${showOnlyCurrentTimeComments ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''}`}
                       title="Chỉ hiện bình luận tại thời điểm này"
@@ -1295,87 +1405,103 @@ export function FileViewDialogShared({
               </div>
 
               {/* File Preview */}
-              <div className="flex-1 p-2 flex items-center justify-center min-h-0 overflow-hidden">
+              <div id="preview-container" className="flex-1 p-2 flex items-center justify-center min-h-0 overflow-hidden">
                 {renderFilePreview()}
               </div>
             </div>
 
-            {/* Comments Sidebar - Normal Mode */}
             {showComments && !isVideoFullscreen && (
-              <div className="w-full sm:w-[350px] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l h-[38vh] sm:h-auto sm:max-h-none">
-                <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
-                  <CommentsList
-                    comments={fileComments}
-                    currentUserName={currentUserName}
-                    onResolveToggle={onResolveToggle}
-                    onTimestampClick={handleTimestampClick}
-                    onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
-                    onReply={async (parentCommentId, userName, content) => {
-                      await onAddComment(userName, content, undefined, parentCommentId)
-                    }}
-                    isSequence={file.type === 'sequence'}
-                    isAdmin={isAdmin}
-                    onEdit={onEditComment}
-                    onDelete={onDeleteComment}
-                  />
-                  {fileComments.length === 0 && (
-                    <div className="text-center text-muted-foreground py-8">
-                      Chưa có bình luận nào
-                      {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
-                    </div>
-                  )}
+              <div className="contents">
+                {/* Resize Handle */}
+                <div
+                  id="comments-resize-handle"
+                  className="hidden sm:flex w-4 -mr-2 -ml-2 z-20 cursor-col-resize items-center justify-center hover:bg-accent/50 active:bg-accent transition-colors flex-shrink-0 relative group"
+                  onMouseDown={handleResizeStart}
+                >
+                  {/* Visual Indicator */}
+                  <div className="w-1 h-8 rounded-full bg-border group-hover:bg-primary transition-colors" />
                 </div>
 
-                {/* Desktop: Always show comment input */}
-                <div className="hidden sm:block p-4 border-t bg-background flex-shrink-0">
-                  <AddComment
-                    onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
-                      const hasData = annotationData && annotationData.length > 0
-                      const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                        konva: annotationData,
-                        camera: glbViewerRef.current?.getCameraState()
-                      }) : null
+                <div
+                  id="comments-sidebar"
+                  className="w-full sm:w-[var(--comment-width)] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l h-[38vh] sm:h-auto sm:max-h-none transition-[width] duration-0"
+                  style={{ '--comment-width': `${commentWidth}px` } as React.CSSProperties}
+                >
+                  <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+                    <CommentsList
+                      comments={fileComments}
+                      currentUserName={currentUserName}
+                      onResolveToggle={onResolveToggle}
+                      onTimestampClick={handleTimestampClick}
+                      onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
+                      onReply={async (parentCommentId, userName, content) => {
+                        await onAddComment(userName, content, undefined, parentCommentId)
+                      }}
+                      isSequence={file.type === 'sequence'}
+                      isAdmin={isAdmin}
+                      onEdit={onEditComment}
+                      onDelete={onDeleteComment}
+                    />
+                    {fileComments.length === 0 && (
+                      <div className="text-center text-muted-foreground py-8">
+                        Chưa có bình luận nào
+                        {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
+                      </div>
+                    )}
+                  </div>
 
-                      await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+                  {/* Desktop: Always show comment input */}
+                  <div className="hidden sm:block p-4 border-t bg-background flex-shrink-0">
+                    <AddComment
+                      onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                        const hasData = annotationData && annotationData.length > 0
+                        const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                          konva: annotationData,
+                          camera: glbViewerRef.current?.getCameraState()
+                        }) : null
 
-                      if (dataToSave) {
-                        setAnnotationData(null)
-                        setIsAnnotating(false)
-                      }
-                    }}
-                    userName={currentUserName}
-                    onUserNameChange={onUserNameChange}
-                    currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                    showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                    annotationData={!isReadOnly ? annotationData : null}
-                    onAnnotationClick={handleStartAnnotating}
-                  />
-                </div>
+                        await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
 
-                {/* Mobile: Comment Input (Always visible now, no toggle) */}
-                <div className="sm:hidden border-t bg-background flex-shrink-0 p-2">
-                  <AddComment
-                    onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
-                      const hasData = annotationData && annotationData.length > 0
-                      const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                        konva: annotationData,
-                        camera: glbViewerRef.current?.getCameraState()
-                      }) : null
+                        if (dataToSave) {
+                          setAnnotationData(null)
+                          setIsAnnotating(false)
+                        }
+                      }}
+                      userName={currentUserName}
+                      onUserNameChange={onUserNameChange}
+                      currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                      showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                      annotationData={!isReadOnly ? annotationData : null}
+                      onAnnotationClick={handleStartAnnotating}
+                    />
+                  </div>
 
-                      await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+                  {/* Mobile: Comment Input (Always visible now, no toggle) */}
+                  <div id="mobile-add-comment" className="sm:hidden border-t bg-background flex-shrink-0 p-2">
+                    <AddComment
+                      isMobile={true}
+                      onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                        const hasData = annotationData && annotationData.length > 0
+                        const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                          konva: annotationData,
+                          camera: glbViewerRef.current?.getCameraState()
+                        }) : null
 
-                      if (dataToSave) {
-                        setAnnotationData(null)
-                        setIsAnnotating(false)
-                      }
-                    }}
-                    userName={currentUserName}
-                    onUserNameChange={onUserNameChange}
-                    currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                    showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                    annotationData={!isReadOnly ? annotationData : null}
-                    onAnnotationClick={handleStartAnnotating}
-                  />
+                        await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+
+                        if (dataToSave) {
+                          setAnnotationData(null)
+                          setIsAnnotating(false)
+                        }
+                      }}
+                      userName={currentUserName}
+                      onUserNameChange={onUserNameChange}
+                      currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                      showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                      annotationData={!isReadOnly ? annotationData : null}
+                      onAnnotationClick={handleStartAnnotating}
+                    />
+                  </div>
                 </div>
               </div>
             )}
