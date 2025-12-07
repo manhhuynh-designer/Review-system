@@ -13,7 +13,7 @@ import { DeleteConfirmDialog } from '@/components/dashboard/DeleteConfirmDialog'
 import { ExportDataDialog } from '@/components/dashboard/ExportDataDialog'
 import { RecentCommentsCard } from '@/components/dashboard/RecentCommentsCard'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
-import { formatBytes, calculateTotalSize, exportToJSON } from '@/lib/storageUtils'
+import { formatBytes, calculateTotalSize } from '@/lib/storageUtils'
 import type { File as FileType, Comment } from '@/types'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
@@ -24,6 +24,82 @@ interface FileWithProject extends FileType {
     projectStatus?: 'active' | 'archived'
 }
 
+// Helper functions for file extensions
+const getFileExtension = (url: string, mimeType?: string, fileType?: string): string => {
+    // Try to extract from URL first (works for direct storage paths)
+    // Firebase URLs often have format: ...%2Ffilename.ext?alt=media&token=...
+    // So we need to decode and extract the extension
+    let urlMatch = url.match(/\.([^./?#]+)(?=[?#]|$)/)
+    
+    if (!urlMatch && url.includes('%2F')) {
+        // Try to find extension in encoded URL path
+        const decoded = decodeURIComponent(url.split('?')[0])
+        urlMatch = decoded.match(/\.([^./?#]+)$/)
+    }
+    
+    if (urlMatch) {
+        const ext = urlMatch[1].toLowerCase()
+        if (ext === 'jpeg') return '.jpg'
+        return `.${ext}`
+    }
+    
+    if (mimeType) {
+        const mimeMap: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/jpg': '.jpg',
+            'image/png': '.png',
+            'image/gif': '.gif',
+            'image/webp': '.webp',
+            'image/svg+xml': '.svg',
+            'video/mp4': '.mp4',
+            'video/webm': '.webm',
+            'video/quicktime': '.mov',
+            'video/x-msvideo': '.avi',
+            'application/pdf': '.pdf',
+            'model/gltf-binary': '.glb',
+            'model/gltf+json': '.gltf',
+            'application/octet-stream': '' // Generic binary, can't determine extension
+        }
+        
+        if (mimeMap[mimeType]) return mimeMap[mimeType]
+        
+        // Fallback: extract from MIME type
+        const ext = mimeType.split('/')[1]?.split('+')[0]?.split(';')[0]
+        if (ext && ext !== 'octet-stream') {
+            return `.${ext.replace('jpeg', 'jpg')}`
+        }
+    }
+    
+    // Fallback based on file type
+    const typeMap: Record<string, string> = {
+        'image': '.jpg',
+        'video': '.mp4',
+        'pdf': '.pdf',
+        'model': '.glb',
+        'sequence': '.jpg'
+    }
+    
+    return typeMap[fileType || ''] || ''
+}
+
+const ensureFileExtension = (filename: string, url: string, mimeType?: string, fileType?: string): string => {
+    const correctExt = getFileExtension(url, mimeType, fileType)
+    
+    // If no extension found from any source, return as is
+    if (!correctExt) {
+        console.warn(`No extension found for file: ${filename}`)
+        return filename
+    }
+    
+    const hasExtension = /\.[a-zA-Z0-9]+$/.test(filename)
+    if (hasExtension) {
+        // Replace existing extension with correct one
+        return filename.replace(/\.[^.]+$/, correctExt)
+    }
+    
+    // Add extension
+    return `${filename}${correctExt}`
+}
 
 export default function DashboardPage() {
     const { user } = useAuthStore()
@@ -262,8 +338,15 @@ export default function DashboardPage() {
     }
 
     const handleExport = async (type: 'files' | 'comments' | 'all') => {
-        setLoading(true)
+        setIsDownloading(true)
+        setDownloadProgress(0)
+        setDownloadMessage('Đang chuẩn bị export...')
+
         try {
+            const zip = new JSZip()
+            const timestamp = new Date().toISOString().split('T')[0]
+
+            // Create export data
             const exportData: any = {
                 exportDate: new Date().toISOString(),
                 adminEmail,
@@ -278,16 +361,137 @@ export default function DashboardPage() {
                 comments: type === 'comments' || type === 'all' ? comments : []
             }
 
-            const timestamp = new Date().toISOString().split('T')[0]
-            const filename = `review-system-export-${type}-${timestamp}.json`
-            exportToJSON(exportData, filename)
+            // Add JSON data to ZIP
+            const jsonData = JSON.stringify(exportData, null, 2)
+            zip.file(`export-data-${timestamp}.json`, jsonData)
 
+            setDownloadProgress(20)
+            setDownloadMessage('Đang tải file metadata...')
+
+            // If exporting files, include actual file data
+            if (type === 'files' || type === 'all') {
+                const filesToExport = statistics.largestFiles.slice(0, 20) // Limit to 20 largest files
+                
+                // Calculate total items for progress (including sequence frames)
+                let totalItems = 0
+                for (const file of filesToExport) {
+                    const currentVersion = file.versions.find(v => v.version === file.currentVersion)
+                    if (file.type === 'sequence' && currentVersion?.sequenceUrls) {
+                        totalItems += currentVersion.sequenceUrls.length
+                    } else {
+                        totalItems += 1
+                    }
+                }
+                
+                let processedItems = 0
+
+                for (const file of filesToExport) {
+                    const currentVersion = file.versions.find(v => v.version === file.currentVersion)
+                    if (!currentVersion?.url) continue
+
+                    const folderName = file.projectName || 'unknown'
+
+                    try {
+                        // Handle image sequences
+                        if (file.type === 'sequence' && currentVersion?.sequenceUrls && currentVersion.sequenceUrls.length > 0) {
+                            setDownloadMessage(`Đang tải sequence ${file.name}...`)
+                            
+                            // Create subfolder for sequence: files/projectName/sequenceName/
+                            const sequenceFolderName = file.name.replace(/\.[^/.]+$/, '') || file.name
+                            const sequenceFolder = zip.folder(`files/${folderName}/${sequenceFolderName}`)
+                            
+                            if (sequenceFolder) {
+                                // Download all frames
+                                for (let i = 0; i < currentVersion.sequenceUrls.length; i++) {
+                                    try {
+                                        setDownloadMessage(`Đang tải frame ${i + 1}/${currentVersion.sequenceUrls.length} của ${file.name}`)
+                                        const frameResponse = await fetch(currentVersion.sequenceUrls[i])
+                                        
+                                        if (frameResponse.ok) {
+                                            const frameBlob = await frameResponse.blob()
+                                            const mimeType = frameResponse.headers.get('content-type') || frameBlob.type
+                                            const ext = getFileExtension(currentVersion.sequenceUrls[i], mimeType, 'image')
+                                            const frameName = `frame_${String(i + 1).padStart(4, '0')}${ext || '.jpg'}`
+                                            sequenceFolder.file(frameName, frameBlob)
+                                        }
+                                    } catch (err) {
+                                        console.error(`Error fetching frame ${i} of ${file.name}:`, err)
+                                    }
+                                    
+                                    processedItems++
+                                    setDownloadProgress(20 + (processedItems / totalItems) * 60)
+                                }
+                                
+                                // Add sequence info file
+                                const sequenceInfo = {
+                                    name: file.name,
+                                    type: 'sequence',
+                                    frameCount: currentVersion.sequenceUrls.length,
+                                    version: currentVersion.version,
+                                    uploadedAt: currentVersion.uploadedAt?.toDate?.()?.toISOString() || null
+                                }
+                                sequenceFolder.file('sequence-info.json', JSON.stringify(sequenceInfo, null, 2))
+                            }
+                        } else {
+                            // Handle single files
+                            setDownloadMessage(`Đang tải ${file.name}...`)
+                            const response = await fetch(currentVersion.url)
+                            
+                            if (response.ok) {
+                                const blob = await response.blob()
+                                
+                                // Get MIME type from response or blob
+                                const mimeType = response.headers.get('content-type') || blob.type || currentVersion.metadata?.type
+                                
+                                // Ensure file has correct extension
+                                const fileName = ensureFileExtension(file.name, currentVersion.url, mimeType, file.type)
+                                
+                                console.log(`Export file: ${file.name} -> ${fileName} (mime: ${mimeType}, type: ${file.type})`)
+                                
+                                zip.file(`files/${folderName}/${fileName}`, blob)
+                            }
+                            
+                            processedItems++
+                            setDownloadProgress(20 + (processedItems / totalItems) * 60)
+                        }
+                    } catch (err) {
+                        console.error(`Error fetching file ${file.name}:`, err)
+                        processedItems++
+                    }
+                }
+            } else {
+                setDownloadProgress(80)
+            }
+
+            // Generate and download ZIP
+            setDownloadMessage('Đang nén dữ liệu...')
+            const zipBlob = await zip.generateAsync({
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 6 }
+            }, (metadata) => {
+                setDownloadProgress(80 + (metadata.percent * 0.2))
+            })
+
+            // Download ZIP file
+            const filename = `review-system-export-${type}-${timestamp}.zip`
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(zipBlob)
+            link.download = filename
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(link.href)
+
+            toast.success('Export thành công!')
             return exportData
         } catch (error) {
             console.error('Export error:', error)
+            toast.error('Lỗi khi export dữ liệu')
             throw error
         } finally {
-            setLoading(false)
+            setIsDownloading(false)
+            setDownloadProgress(0)
         }
     }
 
@@ -354,17 +558,6 @@ export default function DashboardPage() {
             let successCount = 0
             let errorCount = 0
 
-            // Helper to get file extension
-            const getFileExtension = (url: string, mimeType?: string): string => {
-                const urlMatch = url.match(/\.[^./?#]+(?=[?#]|$)/)
-                if (urlMatch) return urlMatch[0]
-                if (mimeType) {
-                    const ext = mimeType.split('/')[1]
-                    return `.${ext.replace('jpeg', 'jpg')}`
-                }
-                return ''
-            }
-
             for (const file of filesToDownload) {
                 const currentVersion = file.versions.find(v => v.version === file.currentVersion)
                 if (!currentVersion?.url) {
@@ -422,12 +615,8 @@ export default function DashboardPage() {
 
                         const blob = await response.blob()
 
-                        // Ensure file has extension
-                        let fileName = file.name
-                        if (!fileName.includes('.')) {
-                            const ext = getFileExtension(currentVersion.url, blob.type)
-                            fileName = `${fileName}${ext}`
-                        }
+                        // Ensure file has correct extension
+                        const fileName = ensureFileExtension(file.name, currentVersion.url, blob.type, file.type)
 
                         zip.file(fileName, blob)
 
@@ -499,29 +688,31 @@ export default function DashboardPage() {
     return (
         <div className="container mx-auto p-6 space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold">Dashboard</h1>
-                    <p className="text-muted-foreground">
+                    <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+                    <p className="text-sm text-muted-foreground">
                         Thống kê và quản lý dữ liệu Firebase
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => window.location.reload()}
                         disabled={loading}
+                        className="flex-1 sm:flex-none min-w-[120px]"
                     >
-                        <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                        Làm mới
+                        <RefreshCw className={`w-4 h-4 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">Làm mới</span>
                     </Button>
                     <Button
                         size="sm"
                         onClick={() => setExportDialogOpen(true)}
+                        className="flex-1 sm:flex-none min-w-[120px]"
                     >
-                        <Download className="w-4 h-4 mr-2" />
-                        Export Data
+                        <Download className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Export Data</span>
                     </Button>
                 </div>
             </div>

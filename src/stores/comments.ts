@@ -21,6 +21,7 @@ interface CommentState {
   comments: Comment[]
   loading: boolean
   unsubscribe: Unsubscribe | null
+  unsubscribeMap: Map<string, Unsubscribe>
 
   subscribeToComments: (projectId: string, fileId?: string) => void
   addComment: (projectId: string, fileId: string, version: number, userName: string, content: string, timestamp?: number, parentCommentId?: string, annotationData?: string | null, attachments?: File[]) => Promise<void>
@@ -36,11 +37,17 @@ export const useCommentStore = create<CommentState>((set, get) => ({
   comments: [],
   loading: false,
   unsubscribe: null,
+  unsubscribeMap: new Map(),
 
   subscribeToComments: (projectId: string, fileId?: string) => {
-    // Avoid requiring composite Firestore indexes or causing watch conflicts by
-    // ordering only by createdAt on the server and applying pinned-first
-    // sorting client-side. This is more robust across existing data.
+    const { unsubscribeMap } = get()
+    const subscriptionKey = fileId ? `${projectId}:${fileId}` : projectId
+
+    // Skip if already subscribed
+    if (unsubscribeMap.has(subscriptionKey)) {
+      return
+    }
+
     let q = query(
       collection(db, 'projects', projectId, 'comments'),
       orderBy('createdAt', 'desc')
@@ -55,28 +62,36 @@ export const useCommentStore = create<CommentState>((set, get) => ({
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const comments = snapshot.docs.map(doc => ({
+      const newComments = snapshot.docs.map(doc => ({
         id: doc.id,
         projectId,
         ...doc.data()
       })) as Comment[]
 
-      // Ensure pinned comments appear first even if previous documents
-      // don't have the `isPinned` field. New comments default to false.
-      comments.sort((a, b) => {
-        const aPinned = (a as any).isPinned ? 1 : 0
-        const bPinned = (b as any).isPinned ? 1 : 0
-        if (aPinned !== bPinned) return bPinned - aPinned
-        const aTime = (a as any).createdAt?.toMillis ? (a as any).createdAt.toMillis() : 0
-        const bTime = (b as any).createdAt?.toMillis ? (b as any).createdAt.toMillis() : 0
-        return bTime - aTime
-      })
+      // Merge with existing comments from other projects
+      set((state) => {
+        const existingComments = state.comments.filter(c => c.projectId !== projectId || (fileId && c.fileId !== fileId))
+        const allComments = [...existingComments, ...newComments]
 
-      set({ comments })
+        // Sort: pinned first, then by date
+        allComments.sort((a, b) => {
+          const aPinned = (a as any).isPinned ? 1 : 0
+          const bPinned = (b as any).isPinned ? 1 : 0
+          if (aPinned !== bPinned) return bPinned - aPinned
+          const aTime = (a as any).createdAt?.toMillis ? (a as any).createdAt.toMillis() : 0
+          const bTime = (b as any).createdAt?.toMillis ? (b as any).createdAt.toMillis() : 0
+          return bTime - aTime
+        })
+
+        return { comments: allComments }
+      })
     }, (error) => {
       toast.error('Lỗi tải bình luận: ' + error.message)
     })
-    set({ unsubscribe })
+
+    // Store the unsubscribe function
+    unsubscribeMap.set(subscriptionKey, unsubscribe)
+    set({ unsubscribeMap, unsubscribe })
   },
 
   addComment: async (projectId: string, fileId: string, version: number, userName: string, content: string, timestamp?: number, parentCommentId?: string, annotationData?: string | null, attachments?: File[]) => {
@@ -258,10 +273,18 @@ export const useCommentStore = create<CommentState>((set, get) => ({
   },
 
   cleanup: () => {
-    const { unsubscribe } = get()
+    const { unsubscribe, unsubscribeMap } = get()
+    
+    // Cleanup all subscriptions
+    if (unsubscribeMap && unsubscribeMap.size > 0) {
+      unsubscribeMap.forEach(unsub => unsub())
+      unsubscribeMap.clear()
+    }
+    
     if (unsubscribe) {
       unsubscribe()
-      set({ unsubscribe: null, comments: [] })
     }
+    
+    set({ unsubscribe: null, unsubscribeMap: new Map(), comments: [] })
   },
 }))

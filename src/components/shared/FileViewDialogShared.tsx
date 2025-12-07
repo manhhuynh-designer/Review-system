@@ -244,6 +244,86 @@ export function FileViewDialogShared({
     [comments, file.id, currentVersion]
   )
 
+  // Helper to get file extension from URL or MIME type
+  const getFileExtension = (url: string, mimeType?: string, fileType?: string): string => {
+    // Try to extract from URL first (works for direct storage paths)
+    // Firebase URLs often have format: ...%2Ffilename.ext?alt=media&token=...
+    let urlMatch = url.match(/\.([^./?#]+)(?=[?#]|$)/)
+    
+    if (!urlMatch && url.includes('%2F')) {
+      // Try to find extension in encoded URL path
+      const decoded = decodeURIComponent(url.split('?')[0])
+      urlMatch = decoded.match(/\.([^./?#]+)$/)
+    }
+    
+    if (urlMatch) {
+      const ext = urlMatch[1].toLowerCase()
+      if (ext === 'jpeg') return '.jpg'
+      return `.${ext}`
+    }
+    
+    // Try from MIME type
+    if (mimeType) {
+      const mimeMap: Record<string, string> = {
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/png': '.png',
+        'image/gif': '.gif',
+        'image/webp': '.webp',
+        'image/svg+xml': '.svg',
+        'video/mp4': '.mp4',
+        'video/webm': '.webm',
+        'video/quicktime': '.mov',
+        'video/x-msvideo': '.avi',
+        'application/pdf': '.pdf',
+        'model/gltf-binary': '.glb',
+        'model/gltf+json': '.gltf',
+        'application/octet-stream': ''
+      }
+      
+      if (mimeMap[mimeType]) return mimeMap[mimeType]
+      
+      // Fallback to extracting from MIME type
+      const ext = mimeType.split('/')[1]?.split('+')[0]?.split(';')[0]
+      if (ext && ext !== 'octet-stream') {
+        return `.${ext.replace('jpeg', 'jpg')}`
+      }
+    }
+    
+    // Fallback based on file type
+    const typeMap: Record<string, string> = {
+      'image': '.jpg',
+      'video': '.mp4',
+      'pdf': '.pdf',
+      'model': '.glb',
+      'sequence': '.jpg'
+    }
+    
+    return typeMap[fileType || ''] || ''
+  }
+
+  // Helper to ensure filename has extension
+  const ensureFileExtension = (filename: string, url: string, mimeType?: string, fileType?: string): string => {
+    // Extract the extension we want to use
+    const correctExt = getFileExtension(url, mimeType, fileType)
+    
+    if (!correctExt) {
+      // No extension found anywhere, return as is
+      return filename
+    }
+    
+    // Check if filename already has the correct extension
+    const hasExtension = /\.[a-zA-Z0-9]+$/.test(filename)
+    
+    if (hasExtension) {
+      // Replace existing extension with the correct one
+      return filename.replace(/\.[^.]+$/, correctExt)
+    }
+    
+    // Add extension if not present
+    return `${filename}${correctExt}`
+  }
+
   // Filter comments based on current time/frame if enabled
   const fileComments = showOnlyCurrentTimeComments && (file.type === 'video' || file.type === 'sequence' || file.type === 'pdf')
     ? allFileComments.filter(c => {
@@ -746,9 +826,11 @@ export function FileViewDialogShared({
           {/* Scaled content wrapper (image + annotations) */}
           <div
             className="origin-center cursor-grab active:cursor-grabbing"
-            style={{
-              transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-              pointerEvents: zoom > 1 ? 'auto' : 'none'
+            ref={(el) => {
+              if (!el) return
+              const pe = zoom > 1 ? 'auto' : 'none'
+              el.style.pointerEvents = pe
+              el.style.transform = `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`
             }}
             onMouseDown={(e) => {
               if (zoom > 1) {
@@ -1282,7 +1364,12 @@ export function FileViewDialogShared({
                     )}
 
                     <DropdownMenuItem asChild>
-                      <a href={effectiveUrl} download target="_blank" rel="noreferrer">
+                      <a 
+                        href={effectiveUrl} 
+                        download={ensureFileExtension(file.name, effectiveUrl, current?.metadata?.type, file.type)}
+                        target="_blank" 
+                        rel="noreferrer"
+                      >
                         <Download className="w-4 h-4 mr-2" />
                         Tải xuống
                       </a>
@@ -1322,7 +1409,12 @@ export function FileViewDialogShared({
               )}
 
               <Button variant="outline" size="sm" asChild className="hidden sm:flex">
-                <a href={effectiveUrl} download target="_blank" rel="noreferrer">
+                <a 
+                  href={effectiveUrl} 
+                  download={ensureFileExtension(file.name, effectiveUrl, current?.metadata?.type, file.type)}
+                  target="_blank" 
+                  rel="noreferrer"
+                >
                   <Download className="w-4 h-4 mr-2" />
                   <span className="hidden md:inline">Tải xuống</span>
                   <span className="md:hidden">Tải</span>
@@ -1429,7 +1521,10 @@ export function FileViewDialogShared({
                 <div
                   id="comments-sidebar"
                   className="w-full sm:w-[var(--comment-width)] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l h-[38vh] sm:h-auto sm:max-h-none transition-[width] duration-0"
-                  style={{ '--comment-width': `${commentWidth}px` } as React.CSSProperties}
+                  ref={(el) => {
+                    if (!el) return
+                    el.style.setProperty('--comment-width', `${commentWidth}px`)
+                  }}
                 >
                   <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
                     <CommentsList

@@ -14,7 +14,7 @@ import {
   where
 } from 'firebase/firestore'
 import type { Unsubscribe } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
 import { createNotification } from '../lib/notifications'
 import type { File as FileModel, FileType, FileVersion } from '../types'
@@ -25,6 +25,7 @@ interface FileState {
   files: FileModel[]
   selectedFile: FileModel | null
   uploading: boolean
+  uploadProgress: number
   deleting: boolean
   error: string | null
   unsubscribes: Map<string, Unsubscribe> // Changed from single unsubscribe to Map
@@ -49,6 +50,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   files: [],
   selectedFile: null,
   uploading: false,
+  uploadProgress: 0,
   deleting: false,
   error: null,
   unsubscribes: new Map(),
@@ -97,7 +99,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   uploadFile: async (projectId: string, file: File, existingFileId?: string) => {
     console.log('🚀 Upload started:', { projectId, fileName: file.name, size: file.size, existingFileId })
-    set({ uploading: true, error: null })
+    set({ uploading: true, uploadProgress: 0, error: null })
 
     try {
       const fileId = existingFileId || generateId()
@@ -125,10 +127,30 @@ export const useFileStore = create<FileState>((set, get) => ({
       console.log('☁️ Storage path:', storagePath)
 
       const storageRef = ref(storage, storagePath)
-      console.log('⬆️ Starting upload to storage...')
-      const snapshot = await uploadBytes(storageRef, file)
+      console.log('⬆️ Starting upload to storage (resumable)...')
+      const uploadTask = uploadBytesResumable(storageRef, file)
+
+      const url: string = await new Promise((resolve, reject) => {
+        uploadTask.on('state_changed', (snapshot) => {
+          try {
+            const progress = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0
+            set({ uploadProgress: progress })
+          } catch (e) {
+            // ignore
+          }
+        }, (err) => {
+          reject(err)
+        }, async () => {
+          try {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref)
+            resolve(downloadUrl)
+          } catch (e) {
+            reject(e)
+          }
+        })
+      })
       console.log('✅ Upload completed, getting download URL...')
-      const url = await getDownloadURL(snapshot.ref)
+      console.log('🔗 Download URL obtained:', url)
       console.log('🔗 Download URL obtained:', url)
 
       // Create version metadata
@@ -237,7 +259,8 @@ export const useFileStore = create<FileState>((set, get) => ({
       toast.error(errorMessage)
       throw error
     } finally {
-      set({ uploading: false })
+      // finalize
+      set({ uploading: false, uploadProgress: 0 })
     }
   },
 
@@ -247,7 +270,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   uploadSequence: async (projectId: string, files: File[], name: string, fps: number = 24, existingFileId?: string) => {
     console.log('🎬 Sequence upload started:', { projectId, name, frameCount: files.length, fps, existingFileId })
-    set({ uploading: true, error: null })
+    set({ uploading: true, uploadProgress: 0, error: null })
 
     try {
       const fileId = existingFileId || generateId()
@@ -266,21 +289,42 @@ export const useFileStore = create<FileState>((set, get) => ({
       }
       console.log('🔢 Version:', currentVersion)
 
-      // Upload all frames to Storage
+      // Upload all frames to Storage (track progress across all frames)
       const sequenceUrls: string[] = []
       let totalSize = 0
+      for (const f of sortedFiles) totalSize += f.size
+
+      let uploadedSoFar = 0
 
       for (let i = 0; i < sortedFiles.length; i++) {
         const file = sortedFiles[i]
-        totalSize += file.size
 
         const storagePath = `projects/${projectId}/${fileId}/v${currentVersion}/frames/${String(i).padStart(4, '0')}_${file.name}`
         console.log(`⬆️ Uploading frame ${i + 1}/${sortedFiles.length}: ${storagePath}`)
 
         const storageRef = ref(storage, storagePath)
-        const snapshot = await uploadBytes(storageRef, file)
-        const url = await getDownloadURL(snapshot.ref)
-        sequenceUrls.push(url)
+        const uploadTask = uploadBytesResumable(storageRef, file)
+
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed', (snapshot) => {
+            const currentFileTransferred = snapshot.bytesTransferred
+            const progress = totalSize ? Math.round(((uploadedSoFar + currentFileTransferred) / totalSize) * 100) : 0
+            set({ uploadProgress: progress })
+          }, (err) => reject(err), async () => {
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref)
+              sequenceUrls.push(url)
+              // after successful upload of this file, increment uploadedSoFar by file.size
+              uploadedSoFar += file.size
+              // ensure progress moves forward to at least the finished files
+              const progressNow = totalSize ? Math.round((uploadedSoFar / totalSize) * 100) : 0
+              set({ uploadProgress: progressNow })
+              resolve()
+            } catch (e) {
+              reject(e)
+            }
+          })
+        })
       }
 
       console.log('✅ All frames uploaded, getting URLs...')

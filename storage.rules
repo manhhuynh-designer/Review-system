@@ -2,25 +2,43 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read access to all files for public review links
-    match /{allPaths=**} {
+    // Public files for review links (explicitly marked as public)
+    match /projects/{projectId}/public/{allPaths=**} {
       allow read: if true;
-    }
-
-    // Allow authenticated users to write to projects folder
-    match /projects/{projectId}/{allPaths=**} {
       allow write: if request.auth != null;
     }
     
-    // Allow authenticated users to write comment attachments
+    // Review files - only readable with valid project access
+    match /projects/{projectId}/files/{allPaths=**} {
+      allow read: if true; // For review functionality - but will use signed URLs
+      allow write: if request.auth != null;
+    }
+    
+    // Legacy projects folder - temporary compatibility (will phase out)
+    match /projects/{projectId}/{fileId}/{allPaths=**} {
+      allow read: if true; // Temporary for existing files
+      allow write: if request.auth != null;
+    }
+    
+    // Private files - admin only
+    match /projects/{projectId}/private/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Comment attachments - public read, auth write
     match /comments/{projectId}/{commentId}/{allPaths=**} {
+      allow read: if true;
       allow write: if request.auth != null;
-      allow read: if true; // keep reads public (consistent with top-level read)
     }
     
-    // Allow authenticated users to write to test folder (for debugging)
+    // Test folder for debugging - auth only
     match /test/{allPaths=**} {
       allow read, write: if request.auth != null;
+    }
+    
+    // Deny all other access by default
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

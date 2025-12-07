@@ -235,6 +235,24 @@ src/
 ffmpeg -i input.mov -c:v libx264 -c:a aac output.mp4
 \`\`\`
 
+## 📝 Recent Changes
+
+- **Build**: Increased Vite `chunkSizeWarningLimit` to `2000` KB in `vite.config.ts` to reduce noisy bundle-size warnings during the build. To change this threshold edit `vite.config.ts` and update `build.chunkSizeWarningLimit` (value is in kilobytes).
+
+- **Viewer Tour UX**: The guided tour for the file viewer now auto-opens only on the first visit from a given IP address. Users can still re-open the tour with the "Help" button in the viewer toolbar. The implementation stores a per-IP "seen" flag in `localStorage` (and falls back to the legacy per-browser flag if IP lookup fails).
+
+- **Resetting Tour State**: To clear the "seen" flag in your browser (useful for testing), open DevTools → Console and run:
+
+```js
+// remove any hasSeenTour_* keys
+Object.keys(localStorage).filter(k => k.startsWith('hasSeenTour_')).forEach(k => localStorage.removeItem(k))
+
+// optionally clear cached client IP used by the tour code
+localStorage.removeItem('client_ip')
+```
+
+Note: The tour IP lookup uses `https://api.ipify.org?format=json` to fetch the public IP and caches it under `client_ip` in `localStorage`.
+
 ## 📝 Roadmap Phase 2
 
 - [ ] Projects CRUD UI hoàn chỉnh

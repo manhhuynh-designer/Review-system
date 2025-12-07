@@ -6,12 +6,17 @@ import { FileCardShared } from '@/components/shared/FileCardShared'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
 import { DeleteFileDialog } from './DeleteFileDialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import { ref, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
+import { formatFileSize } from '@/lib/utils'
+import { Trash2, X, CheckSquare, Square, Grid3x3, List, MessageSquare, Calendar, FileImage, Video, Box, FileText } from 'lucide-react'
 import type { File as FileType } from '@/types'
 
 type SortOption = 'name' | 'date' | 'type' | 'size'
 type SortDirection = 'asc' | 'desc'
+type ViewMode = 'grid' | 'list'
 
 interface FilesListProps {
   projectId: string
@@ -24,6 +29,7 @@ const getFileTypeLabel = (type: string) => {
   if (type === 'image') return 'Hình ảnh'
   if (type === 'video') return 'Video'
   if (type === 'model') return 'Mô hình 3D'
+  if (type === 'sequence') return 'Image Sequence'
   if (type === 'pdf') return 'PDF'
   return 'Tệp tin'
 }
@@ -41,6 +47,22 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
     return localStorage.getItem('reviewUserName') || ''
   })
   const [displayLimit, setDisplayLimit] = useState(20) // Pagination: show 20 files initially
+
+  // Multi-select state
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem('filesViewMode') as ViewMode) || 'grid'
+  })
+
+  // Save view mode preference
+  useEffect(() => {
+    localStorage.setItem('filesViewMode', viewMode)
+  }, [viewMode])
 
   const getKey = (fileId: string, version: number) => `${fileId}-v${version}`
 
@@ -203,6 +225,7 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
   const handleDeleteComment = async (commentId: string) => {
     await deleteComment(projectId, commentId)
   }
+
   const filteredAndSortedFiles = useMemo(() => {
     if (!files) return []
 
@@ -256,6 +279,59 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
   const displayedFiles = filteredAndSortedFiles.slice(0, displayLimit)
   const hasMore = filteredAndSortedFiles.length > displayLimit
 
+  // Multi-select handlers
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(prev => {
+      if (prev) {
+        // Exiting selection mode, clear selections
+        setSelectedFileIds(new Set())
+      }
+      return !prev
+    })
+  }
+
+  const toggleFileSelection = (fileId: string) => {
+    setSelectedFileIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(fileId)) {
+        newSet.delete(fileId)
+      } else {
+        newSet.add(fileId)
+      }
+      return newSet
+    })
+  }
+
+  const selectAllDisplayed = () => {
+    const allIds = displayedFiles.map(f => f.id)
+    setSelectedFileIds(new Set(allIds))
+  }
+
+  const deselectAllFiles = () => {
+    setSelectedFileIds(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedFileIds.size === 0) return
+
+    setBulkDeleting(true)
+    try {
+      // Delete files sequentially to avoid overwhelming the server
+      for (const fileId of selectedFileIds) {
+        await deleteFile(projectId, fileId)
+      }
+      
+      // Clear selection and close dialog
+      setSelectedFileIds(new Set())
+      setBulkDeleteDialogOpen(false)
+      setIsSelectionMode(false)
+    } catch (error) {
+      console.error('Bulk delete failed:', error)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   if (uploading) {
     return (
       <div className="text-center py-8">
@@ -289,27 +365,328 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
 
   return (
     <>
-      {/* Grid of file cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {displayedFiles.map((file) => {
-          const current = file.versions.find(v => v.version === file.currentVersion) || file.versions[0]
-          const urlKey = getKey(file.id, current?.version ?? 1)
-          const effectiveUrl = resolvedUrls[urlKey] ?? current?.url
-          const commentCount = getCommentCount(file.id, file.currentVersion)
+      {/* Compact Selection Toolbar */}
+      {user && filteredAndSortedFiles.length > 0 && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{filteredAndSortedFiles.length} file{filteredAndSortedFiles.length !== 1 ? 's' : ''}</span>
+            {isSelectionMode && selectedFileIds.size > 0 && (
+              <span className="text-primary font-medium">
+                • Đã chọn {selectedFileIds.size}
+              </span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-1">
+            {/* View mode toggle */}
+            <div className="flex items-center border rounded-md mr-2">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="h-7 px-2 rounded-r-none"
+                title="Xem dạng lưới"
+              >
+                <Grid3x3 className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="h-7 px-2 rounded-l-none border-l"
+                title="Xem dạng danh sách"
+              >
+                <List className="w-3.5 h-3.5" />
+              </Button>
+            </div>
 
-          return (
-            <FileCardShared
-              key={file.id}
-              file={file}
-              resolvedUrl={effectiveUrl}
-              commentCount={commentCount}
-              onClick={() => handleFileClick(file)}
-              onDelete={user ? () => handleDeleteClick(file) : undefined}
-              isAdmin={!!user}
-            />
-          )
-        })}
-      </div>
+            {isSelectionMode ? (
+              <>
+                {selectedFileIds.size < displayedFiles.length ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={selectAllDisplayed}
+                    className="h-7 px-2 text-xs"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                    Tất cả
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={deselectAllFiles}
+                    className="h-7 px-2 text-xs"
+                  >
+                    <Square className="w-3.5 h-3.5 mr-1" />
+                    Bỏ chọn
+                  </Button>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setBulkDeleteDialogOpen(true)}
+                  disabled={selectedFileIds.size === 0}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Xóa
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleSelectionMode}
+                  className="h-7 px-2 text-xs"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleSelectionMode}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                Chọn
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Grid View */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {displayedFiles.map((file) => {
+            const current = file.versions.find(v => v.version === file.currentVersion) || file.versions[0]
+            const urlKey = getKey(file.id, current?.version ?? 1)
+            const effectiveUrl = resolvedUrls[urlKey] ?? current?.url
+            const commentCount = getCommentCount(file.id, file.currentVersion)
+            const isSelected = selectedFileIds.has(file.id)
+
+            return (
+              <div key={file.id} className="relative">
+                {/* Selection checkbox overlay - positioned at top-right to avoid badge */}
+                {isSelectionMode && (
+                  <div
+                    className={`absolute top-2 right-2 z-10 transition-all ${isSelected ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleFileSelection(file.id)}
+                      className="h-5 w-5 bg-background border-2 shadow-sm"
+                    />
+                  </div>
+                )}
+                
+                {/* Selection highlight */}
+                <div className={`rounded-lg transition-all ${isSelectionMode && isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
+                  <FileCardShared
+                    file={file}
+                    resolvedUrl={effectiveUrl}
+                    commentCount={commentCount}
+                    onClick={() => {
+                      if (isSelectionMode) {
+                        toggleFileSelection(file.id)
+                      } else {
+                        handleFileClick(file)
+                      }
+                    }}
+                    onDelete={user && !isSelectionMode ? () => handleDeleteClick(file) : undefined}
+                    isAdmin={!!user}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <div className="space-y-1">
+          {displayedFiles.map((file) => {
+            const current = file.versions.find(v => v.version === file.currentVersion) || file.versions[0]
+            const urlKey = getKey(file.id, current?.version ?? 1)
+            const effectiveUrl = resolvedUrls[urlKey] ?? current?.url
+            const commentCount = getCommentCount(file.id, file.currentVersion)
+            const isSelected = selectedFileIds.has(file.id)
+
+            // Render thumbnail based on file type
+            const renderListThumbnail = () => {
+              // Image files
+              if (file.type === 'image' && effectiveUrl) {
+                return (
+                  <img
+                    src={effectiveUrl}
+                    alt={file.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                )
+              }
+
+              // Sequence files - show first frame with badge
+              if (file.type === 'sequence' && effectiveUrl) {
+                return (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={effectiveUrl}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <Badge 
+                      variant="secondary" 
+                      className="absolute bottom-1 right-1 text-[10px] px-1 py-0 h-4 backdrop-blur-sm bg-black/60 text-white border-0"
+                    >
+                      {current?.frameCount || 0}f
+                    </Badge>
+                  </div>
+                )
+              }
+
+              // Video files - show as static thumbnail with play icon overlay
+              if (file.type === 'video' && effectiveUrl) {
+                return (
+                  <div className="relative w-full h-full bg-muted">
+                    {/* Use img instead of video for better performance and no autoplay issues */}
+                    <img
+                      src={effectiveUrl}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                      <Video className="w-6 h-6 text-white drop-shadow" />
+                    </div>
+                  </div>
+                )
+              }
+
+              // Model files - show thumbnail if available, otherwise icon
+              if (file.type === 'model') {
+                if (current?.thumbnailUrl) {
+                  return (
+                    <img
+                      src={current.thumbnailUrl}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  )
+                }
+                return (
+                  <div className="w-full h-full flex items-center justify-center bg-purple-100 dark:bg-purple-950/30">
+                    <Box className="w-8 h-8 text-purple-500" />
+                  </div>
+                )
+              }
+
+              // PDF files - show thumbnail if available, otherwise icon
+              if (file.type === 'pdf') {
+                if (current?.thumbnailUrl) {
+                  return (
+                    <img
+                      src={current.thumbnailUrl}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  )
+                }
+                return (
+                  <div className="w-full h-full flex items-center justify-center bg-red-100 dark:bg-red-950/30">
+                    <FileText className="w-8 h-8 text-red-500" />
+                  </div>
+                )
+              }
+
+              // Fallback for unknown types
+              return (
+                <div className="w-full h-full flex items-center justify-center bg-muted">
+                  <FileImage className="w-8 h-8 text-muted-foreground" />
+                </div>
+              )
+            }
+
+            return (
+              <div
+                key={file.id}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer hover:bg-muted/50 ${
+                  isSelectionMode && isSelected ? 'ring-2 ring-primary ring-offset-1 bg-primary/5' : ''
+                }`}
+                onClick={() => {
+                  if (isSelectionMode) {
+                    toggleFileSelection(file.id)
+                  } else {
+                    handleFileClick(file)
+                  }
+                }}
+              >
+                {/* Checkbox */}
+                {isSelectionMode && (
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleFileSelection(file.id)}
+                    className="h-4 w-4"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                )}
+
+                {/* Thumbnail */}
+                <div className="w-16 h-16 rounded overflow-hidden bg-muted flex-shrink-0 relative">
+                  {renderListThumbnail()}
+                </div>
+
+                {/* File Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-medium truncate">{file.name}</h3>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                      {getFileTypeLabel(file.type)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {file.createdAt.toDate().toLocaleDateString('vi-VN')}
+                    </span>
+                    <span>{formatFileSize(current?.metadata.size || 0)}</span>
+                    {file.versions.length > 1 && (
+                      <span>v{file.currentVersion} ({file.versions.length} phiên bản)</span>
+                    )}
+                    {commentCount > 0 && (
+                      <span className="flex items-center gap-1 text-primary">
+                        <MessageSquare className="w-3 h-3" />
+                        {commentCount}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {user && !isSelectionMode && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteClick(file)
+                    }}
+                    className="flex-shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Load More Button */}
       {hasMore && (
@@ -359,6 +736,15 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
           loading={deleting}
         />
       )}
+
+      {/* Bulk delete confirmation dialog */}
+      <DeleteFileDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        onConfirm={handleBulkDelete}
+        fileName={`${selectedFileIds.size} file đã chọn`}
+        loading={bulkDeleting}
+      />
     </>
   )
 }

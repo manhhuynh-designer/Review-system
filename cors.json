@@ -1,7 +1,15 @@
 [
   {
-    "origin": ["*"],
+    "origin": [
+      "https://view.manhhuynh.work",
+      "https://review-system-git-main-manhhuynhs-projects.vercel.app",
+      "https://review-system-3ijbcxvgm-manhhuynhs-projects.vercel.app",
+      "https://*.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:3000"
+    ],
     "method": ["GET", "HEAD"],
-    "maxAgeSeconds": 3600
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Content-Length", "Cache-Control"]
   }
 ]

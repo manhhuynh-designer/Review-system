@@ -14,7 +14,7 @@ interface SequenceUploaderProps {
 }
 
 export function SequenceUploader({ projectId, existingFileId, onUploadComplete }: SequenceUploaderProps) {
-  const { uploadSequence, uploading } = useFileStore()
+  const { uploadSequence, uploading, uploadProgress } = useFileStore()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [sequenceName, setSequenceName] = useState('')
@@ -183,12 +183,12 @@ export function SequenceUploader({ projectId, existingFileId, onUploadComplete }
       {/* Upload Button */}
       {uploading ? (
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span>Đang upload frames...</span>
-            <span className="text-muted-foreground">{selectedFiles.length} files</span>
+            <div className="flex items-center justify-between text-sm">
+              <span>Đang upload frames...</span>
+              <span className="text-muted-foreground">{selectedFiles.length} files • {uploadProgress}%</span>
+            </div>
+            <Progress value={uploadProgress} className="h-2" />
           </div>
-          <Progress value={50} className="h-2" />
-        </div>
       ) : (
         <Button
           onClick={handleUpload}

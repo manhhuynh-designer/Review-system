@@ -13,7 +13,6 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Download } from 'lucide-react'
 import { formatBytes } from '@/lib/storageUtils'
-import { exportToJSON } from '@/lib/storageUtils'
 import type { ExportData } from '@/stores/statistics'
 
 interface ExportDataDialogProps {
@@ -39,14 +38,7 @@ export function ExportDataDialog({
     const handleExport = async () => {
         setLoading(true)
         try {
-            const data = await onExport(exportType)
-
-            // Generate filename with timestamp
-            const timestamp = new Date().toISOString().split('T')[0]
-            const filename = `review-system-export-${exportType}-${timestamp}.json`
-
-            exportToJSON(data, filename)
-
+            await onExport(exportType)
             onOpenChange(false)
         } catch (error) {
             console.error('Export error:', error)
@@ -75,7 +67,7 @@ export function ExportDataDialog({
                         Export dữ liệu
                     </DialogTitle>
                     <DialogDescription>
-                        Xuất dữ liệu ra file JSON để backup hoặc phân tích
+                        Xuất dữ liệu ra file ZIP bao gồm JSON metadata và các file thực tế
                     </DialogDescription>
                 </DialogHeader>
 
@@ -90,7 +82,7 @@ export function ExportDataDialog({
                                 onCheckedChange={(checked) => checked && setExportType('files')}
                             />
                             <Label htmlFor="export-files" className="cursor-pointer">
-                                Files metadata ({fileCount} files, {formatBytes(totalSize)})
+                                Files data ({fileCount} files, {formatBytes(totalSize)}) - bao gồm 20 files lớn nhất
                             </Label>
                         </div>
 
@@ -143,7 +135,7 @@ export function ExportDataDialog({
                         disabled={loading}
                     >
                         <Download className="w-4 h-4 mr-2" />
-                        {loading ? 'Đang export...' : 'Download JSON'}
+                        {loading ? 'Đang export...' : 'Download ZIP'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

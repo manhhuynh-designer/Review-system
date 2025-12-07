@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { RichTextarea, type RichTextareaRef } from '@/components/ui/rich-textarea'
 import { Send, PenTool, Image, X, Paperclip, Camera, Link as LinkIcon } from 'lucide-react'
 import { LinkDialog } from '@/components/ui/link-dialog'
+import toast from 'react-hot-toast'
 
 interface AttachmentPreview {
     id: string
@@ -40,6 +41,12 @@ export function AddComment({
     const [userName, setUserName] = useState(initialUserName || '')
     const [content, setContent] = useState('')
     const [submitting, setSubmitting] = useState(false)
+    
+    // Anti-spam measures
+    const [honeypotWebsite, setHoneypotWebsite] = useState('')
+    const [honeypotPhone, setHoneypotPhone] = useState('')
+    const [honeypotEmail, setHoneypotEmail] = useState('')
+    const startTimeRef = useRef(Date.now())
     const [attachments, setAttachments] = useState<AttachmentPreview[]>([])
     const [captureView, setCaptureView] = useState(false)
     const [showLinkDialog, setShowLinkDialog] = useState(false)
@@ -98,6 +105,37 @@ export function AddComment({
         e.preventDefault()
 
         if (!userName.trim() || !content.trim()) return
+
+        // Anti-spam validation
+        const timeSpent = Date.now() - startTimeRef.current
+        
+        // Check honeypot fields (should be empty)
+        if (honeypotWebsite || honeypotPhone || honeypotEmail) {
+            console.warn('Bot detected: honeypot fields filled')
+            return
+        }
+        
+        // Minimum time check (human users take time to type)
+        if (timeSpent < 3000) {
+            toast.error('Vui lòng đợi một chút trước khi gửi bình luận')
+            return
+        }
+        
+        // Content length validation
+        if (content.trim().length < 5) {
+            toast.error('Bình luận quá ngắn (tối thiểu 5 ký tự)')
+            return
+        }
+        
+        if (content.trim().length > 2000) {
+            toast.error('Bình luận quá dài (tối đa 2000 ký tự)')
+            return
+        }
+        
+        if (userName.trim().length > 100) {
+            toast.error('Tên quá dài (tối đa 100 ký tự)')
+            return
+        }
 
         setSubmitting(true)
         try {
@@ -218,6 +256,34 @@ export function AddComment({
 
     return (
         <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Honeypot fields - hidden from users, visible to bots */}
+            <div className="hidden" aria-hidden="true">
+                <input 
+                    type="text" 
+                    name="website" 
+                    value={honeypotWebsite}
+                    onChange={(e) => setHoneypotWebsite(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                />
+                <input 
+                    type="tel" 
+                    name="phone" 
+                    value={honeypotPhone}
+                    onChange={(e) => setHoneypotPhone(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                />
+                <input 
+                    type="email" 
+                    name="email" 
+                    value={honeypotEmail}
+                    onChange={(e) => setHoneypotEmail(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                />
+            </div>
+            
             {!initialUserName && (
                 <Input
                     placeholder="Tên của bạn"

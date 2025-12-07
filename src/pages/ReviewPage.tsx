@@ -17,8 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ref, getDownloadURL } from 'firebase/storage'
-import { storage } from '@/lib/firebase'
+import { getSecureDownloadUrl } from '@/lib/secureStorage'
 import type { File as FileType } from '@/types'
 
 export default function ReviewPage() {
@@ -67,7 +66,13 @@ export default function ReviewPage() {
       // for sequences or legacy uploads where metadata.name doesn't match).
       const extractedPath = extractStoragePathFromUrl(currentUrl)
       const targetPath = extractedPath || storagePath
-      const url = await getDownloadURL(ref(storage, targetPath))
+      
+      // Use secure storage utility with fallback to original URL
+      const url = await getSecureDownloadUrl(targetPath, { 
+        maxAge: 3600,
+        fallbackUrl: currentUrl 
+      })
+      
       setResolvedUrls(prev => ({ ...prev, [key]: url }))
       return url
     } catch (e) {
