@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
@@ -46,16 +45,7 @@
       ]
     },
     {
-      "source": "/assets/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/(.*\\.(js|css|woff|woff2|ttf|eot|svg|png|jpg|jpeg|gif|webp|ico))",
+      "source": "/assets/:path*",
       "headers": [
         {
           "key": "Cache-Control",
@@ -64,11 +54,5 @@
       ]
     }
   ],
-  "functions": {
-    "app/api/*": {
-      "maxDuration": 10
-    }
-  },
-  "regions": ["sin1"],
-  "framework": "vite"
+  "regions": ["sin1"]
 }
