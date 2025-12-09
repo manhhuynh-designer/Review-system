@@ -190,11 +190,34 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
     }
 
     const toggleFullscreen = () => {
-        if (containerRef.current) {
-            if (document.fullscreenElement) {
+        const video = videoRef.current
+        const container = containerRef.current
+        
+        // Check if we're currently in fullscreen
+        const isCurrentlyFullscreen = document.fullscreenElement || 
+            (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement
+
+        if (isCurrentlyFullscreen) {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
                 document.exitFullscreen()
-            } else {
-                containerRef.current.requestFullscreen()
+            } else if ((document as unknown as { webkitExitFullscreen?: () => void }).webkitExitFullscreen) {
+                (document as unknown as { webkitExitFullscreen: () => void }).webkitExitFullscreen()
+            }
+        } else {
+            // Enter fullscreen - try container first, then video for iOS
+            if (container?.requestFullscreen) {
+                container.requestFullscreen().catch(() => {
+                    // Fallback to video element fullscreen for iOS
+                    if (video && (video as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
+                        (video as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
+                    }
+                })
+            } else if (container && (container as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen) {
+                (container as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen()
+            } else if (video && (video as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
+                // iOS Safari fallback - use video's native fullscreen
+                (video as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
             }
         }
     }
@@ -331,6 +354,9 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                 ref={videoRef}
                 src={src}
                 crossOrigin="anonymous"
+                playsInline
+                webkit-playsinline=""
+                preload="auto"
                 className={`w-full h-auto bg-black ${!isFullscreen ? getVideoMaxHeight() : ''}`}
                 style={isFullscreen ? {
                     maxHeight: 'calc(100vh - 120px)',
