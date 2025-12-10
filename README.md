@@ -1,275 +1,122 @@
 # Creative Asset Review System
 
-Ứng dụng web review file sáng tạo (hình ảnh, video, 3D model) với hệ thống bình luận realtime và quản lý version.
+Ứng dụng web để review tài sản sáng tạo (images, videos, image sequences, PDFs, và 3D models) với công cụ chú thích, bình luận timestamped cho video, và quản lý phiên bản. README này đã cập nhật để phản ánh trạng thái hiện tại của repository (components, stores, viewers và hạ tầng được tích hợp).
 
-## ✨ Tính năng
+## ✨ Hiện trạng & Tính năng chính
 
 ### Admin (Creator)
-- 🔐 Đăng nhập Firebase Auth
-- 📁 Quản lý Projects (CRUD)
-- 📤 Upload files: Image (PNG/JPG/WebP), Video (MP4/MOV), 3D Model (GLB)
-- 🔄 Quản lý version (v1 → v2 → v3...)
-- 💬 Xem và resolve bình luận realtime
-- 🔗 Tạo link review công khai
+- 🔐 Đăng nhập qua Firebase Auth (admin flows được bảo vệ)
+- 📁 Quản lý Projects và Files (stores: `src/stores/projects.ts`, `src/stores/files.ts`)
+- 📤 Upload files: image (PNG/JPG/WebP), video (MP4), PDF, image sequences và 3D models (GLB) (`src/components/files/FileUploader.tsx`, `SequenceUploader.tsx`)
+- 🔄 Versioning: mỗi file có phiên bản, có thể chuyển giữa các version trong `FileViewDialog.tsx`
+- 💬 Quản lý bình luận realtime, resolve/unresolve (`src/stores/comments.ts`, `CommentsList.tsx`)
+- ✏️ Annotation tools: `AnnotationCanvasKonva.tsx` + `AnnotationToolbar.tsx` (pen/rect/arrow/undo/redo)
+- 🔗 Public review links: có hỗ trợ mở link review cho reviewer (cơ chế public read theo mặc định; xem phần Security)
 
 ### Client (Reviewer)
-- 🚫 Không cần đăng nhập
-- 👤 Nhập tên hiển thị (lưu localStorage)
-- 🖼️ Viewer tối giản, chất lượng cao
-- 💬 Bình luận thông minh: video comments gắn timestamp
-- ⚡ Cập nhật realtime
+- 🚫 Có thể truy cập mà không cần đăng ký (public reviewer flow)
+- 👤 Nhập tên hiển thị (lưu trong `localStorage` bởi UI reviewer)
+- 🖼️ Xem file trong các viewer chuyên biệt: images, PDF (`PDFViewer.tsx`), video (`CustomVideoPlayer.tsx`), image sequences (`ImageSequenceViewer.tsx`), 3D GLB (`GLBViewer.tsx`)
+- 💬 Bình luận: hỗ trợ timestamped comments cho video, attachments trên comment
+- ⚡ Cập nhật realtime thông qua Firestore onSnapshot
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack (chính xác theo repo)
 
-- **Frontend:** React 19 + Vite + TypeScript
-- **Styling:** Tailwind CSS (dark mode default) + Shadcn/UI
-- **State:** Zustand + Firestore realtime
-- **3D:** Three.js + React Three Fiber
-- **Backend:** Firebase (Auth + Firestore + Storage)
-- **Router:** React Router v6
+- **Frontend:** React + Vite + TypeScript
+- **Styling:** Tailwind CSS, shadcn/ui style components
+- **State:** Zustand (stores nằm ở `src/stores`)
+- **Viewers / Canvas:** `react-pdf`, `react-konva` (Konva), `react-three-fiber` + `three.js`, `@mediamonks/fast-image-sequence`
+- **Backend / Services:** Firebase (Auth, Firestore, Storage)
+- **Deployment hints:** Vercel (`vercel.json`) and Firebase Hosting (`firebase.json`)
 
-## 📦 Cài đặt
+## 📦 Cài đặt nhanh
 
-### 1. Clone và cài dependencies
+1. Clone & cài dependencies
 
-\`\`\`powershell
+```powershell
 git clone <repo-url>
 cd Review-system
 npm install
-\`\`\`
+```
 
-### 2. Tạo Firebase Project
+2. Tạo Firebase Project và bật Auth/Firestore/Storage
 
-1. Vào [Firebase Console](https://console.firebase.google.com/)
-2. Tạo project mới
-3. Bật các dịch vụ:
-   - **Authentication** → Email/Password
-   - **Firestore Database** → Start in production mode
-   - **Storage** → Start in production mode
+3. Thêm biến môi trường (copy từ `.env.example` nếu có)
 
-### 3. Lấy Firebase Config
+4. Chạy dev
 
-1. Project Settings → General → Your apps → Web app
-2. Copy config values
-3. Tạo file \`.env\` từ template:
-
-\`\`\`powershell
-Copy-Item .env.example .env
-\`\`\`
-
-4. Điền values vào \`.env\`:
-
-\`\`\`env
-VITE_FIREBASE_API_KEY=AIzaSy...
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123456789:web:abc123
-\`\`\`
-
-### 4. Deploy Firebase Rules
-
-\`\`\`powershell
-# Cài Firebase CLI (nếu chưa có)
-npm install -g firebase-tools
-
-# Login
-firebase login
-
-# Init project (chọn Firestore, Storage, Hosting)
-firebase init
-
-# Deploy rules và indexes
-firebase deploy --only firestore:rules
-firebase deploy --only firestore:indexes
-firebase deploy --only storage
-\`\`\`
-
-### 5. Tạo Admin User
-
-Vào Firebase Console → Authentication → Add user:
-- Email: \`admin@example.com\`
-- Password: (tự đặt mật khẩu mạnh)
-
-### 6. Chạy Development
-
-\`\`\`powershell
+```powershell
 npm run dev
-\`\`\`
+```
 
 Mở http://localhost:5173
 
-## 🚀 Deploy Production
+Xem phần chi tiết cài đặt Firebase và deploy trong file gốc nếu cần (phần hướng dẫn trước đây vẫn áp dụng với các biến `VITE_*`).
 
-### Vercel (Recommended)
+## 📂 Cấu trúc quan trọng (tóm tắt)
 
-\`\`\`powershell
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-
-# Set environment variables trong Vercel dashboard
-# Settings → Environment Variables → thêm tất cả VITE_*
-\`\`\`
-
-### Firebase Hosting
-
-\`\`\`powershell
-# Build
-npm run build
-
-# Deploy
-firebase deploy --only hosting
-\`\`\`
-
-### Netlify
-
-1. Connect repo trong Netlify dashboard
-2. Build command: \`npm run build\`
-3. Publish directory: \`dist\`
-4. Environment variables: thêm tất cả \`VITE_*\`
-
-## 📂 Cấu trúc thư mục
-
-\`\`\`
+```
 src/
 ├── components/
-│   ├── auth/          # AuthGuard
-│   ├── layout/        # AdminLayout, PublicLayout
-│   └── ui/            # Shadcn components
+│   ├── files/               # FileUploader, FilesList, FileViewDialog, FileCard
+│   ├── viewers/             # PDFViewer, CustomVideoPlayer, GLBViewer, ImageSequenceViewer
+│   ├── annotations/         # AnnotationCanvasKonva, AnnotationToolbar
+│   └── ui/                  # shared UI components
 ├── lib/
-│   ├── firebase.ts    # Firebase init
-│   └── utils.ts       # Helpers
+│   ├── firebase.ts          # Firebase init + helpers (upload/delete helpers)
+│   └── storageUtils.ts      # helpers (formatBytes, export, etc.)
 ├── pages/
-│   ├── admin/         # Admin pages
-│   ├── LoginPage.tsx
-│   └── ReviewPage.tsx
-├── stores/            # Zustand stores
-│   ├── auth.ts
-│   ├── projects.ts
-│   ├── files.ts
-│   └── comments.ts
-├── types/
-│   └── index.ts       # TypeScript types
-└── App.tsx            # Router setup
-\`\`\`
-
-## 🔒 Security
-
-- **Firestore Rules:** Public read, public comment create, admin-only write
-- **Storage Rules:** Public read, admin-only upload, 100MB limit, validate file types
-- **Auth:** Chỉ admin được vào \`/app/*\`
-
-⚠️ **Lưu ý:** Public read có nghĩa bất kỳ ai có link review đều xem được. Đảm bảo điều này phù hợp với use case của bạn.
-
-## 🗂️ Data Schema
-
-### Projects
-\`\`\`typescript
-{
-  id: string
-  name: string
-  createdAt: Timestamp
-  status: 'active' | 'archived'
-  adminEmail: string
-}
-\`\`\`
-
-### Files
-\`\`\`typescript
-{
-  id: string
-  projectId: string
-  name: string
-  type: 'image' | 'video' | 'model'
-  versions: [{
-    url: string
-    version: number
-    uploadedAt: Timestamp
-    metadata: { size, type, width?, height?, duration? }
-  }]
-  currentVersion: number
-}
-\`\`\`
-
-### Comments
-\`\`\`typescript
-{
-  id: string
-  projectId: string
-  fileId: string
-  version: number
-  userName: string
-  content: string
-  timestamp: number | null  // seconds for video
-  isResolved: boolean
-  createdAt: Timestamp
-}
-\`\`\`
-
-## 🎯 Workflow
-
-1. **Admin:** Tạo project → Upload file
-2. **Admin:** Chia sẻ link \`/review/:projectId\` cho client
-3. **Client:** Vào link → Nhập tên → Xem file → Comment
-4. **Admin:** Xem comment realtime → Resolve → Upload version mới
-5. **Client:** Thấy version mới realtime → Comment tiếp
-
-## 🐛 Troubleshooting
-
-### Lỗi Firebase: "Missing or insufficient permissions"
-→ Deploy Firestore rules: \`firebase deploy --only firestore:rules\`
-
-### Lỗi CORS khi tải file từ Storage
-→ Đảm bảo Storage rules đã deploy
-
-### Index Firestore chưa tạo
-→ Khi truy vấn, console sẽ gợi ý link tạo index. Click và đợi vài phút.
-
-### Video MOV không play
-→ Chuyển sang MP4 (H.264) bằng FFmpeg:
-\`\`\`powershell
-ffmpeg -i input.mov -c:v libx264 -c:a aac output.mp4
-\`\`\`
-
-## 📝 Recent Changes
-
-- **Build**: Increased Vite `chunkSizeWarningLimit` to `2000` KB in `vite.config.ts` to reduce noisy bundle-size warnings during the build. To change this threshold edit `vite.config.ts` and update `build.chunkSizeWarningLimit` (value is in kilobytes).
-
-- **Viewer Tour UX**: The guided tour for the file viewer now auto-opens only on the first visit from a given IP address. Users can still re-open the tour with the "Help" button in the viewer toolbar. The implementation stores a per-IP "seen" flag in `localStorage` (and falls back to the legacy per-browser flag if IP lookup fails).
-
-- **Resetting Tour State**: To clear the "seen" flag in your browser (useful for testing), open DevTools → Console and run:
-
-```js
-// remove any hasSeenTour_* keys
-Object.keys(localStorage).filter(k => k.startsWith('hasSeenTour_')).forEach(k => localStorage.removeItem(k))
-
-// optionally clear cached client IP used by the tour code
-localStorage.removeItem('client_ip')
+│   └── ReviewPage.tsx       # public review entry point
+├── stores/                  # Zustand stores: auth, files, comments, projects
+└── App.tsx
 ```
 
-Note: The tour IP lookup uses `https://api.ipify.org?format=json` to fetch the public IP and caches it under `client_ip` in `localStorage`.
+## 🔒 Security (hiện trạng và lưu ý)
 
-## 📝 Roadmap Phase 2
+- Hiện tại repo sử dụng Firestore + Storage với mô hình public read cho links review (README trước đây mô tả public read). Điều này có nghĩa là bất kỳ ai có URL file (nếu công khai) hoặc review link có thể truy cập nội dung.
+- Có `firestore.rules` và `storage.rules` trong repo nhưng bạn nên kiểm tra lại rules production để đảm bảo:
+  - Reviewer public không thể ghi vào admin-only paths.
+  - Giới hạn kích thước file và kiểu file upload.
+- Rủi ro đã nhận diện từ scan:
+  - Orphaned attachments: code client hiện không chắc chắn dọn sạch attachments khi comment/file bị xóa — cần thêm Cloud Function để garbage-collect.
+  - Thiếu granular roles / SSO / audit logs cho enterprise.
 
-- [ ] Projects CRUD UI hoàn chỉnh
-- [ ] File upload với drag & drop
-- [ ] Image/Video/3D viewers
-- [ ] Comment panel với timestamp
-- [ ] Public review với username prompt
-- [ ] Version switcher UI
-- [ ] Resolve comment toggle
-- [ ] Search và filter
-- [ ] Export comments PDF
-- [ ] Notifications/webhooks
+Khuyến nghị ngắn gọn:
+- Thay public download bằng signed URLs (Cloud Function) nếu asset nhạy cảm.
+- Thêm invite-only review links nếu cần private reviews.
+- Triển khai Cloud Functions để dọn dẹp attachments khi documents bị xóa.
 
-## 📄 License
+## 🔍 Data model (tóm tắt từ code)
+
+- Projects: `id`, `name`, `createdAt`, `status`, `adminEmail`
+- Files: `id`, `projectId`, `name`, `type`, `versions[]`, `currentVersion` (mỗi version có url + metadata)
+- Comments: `id`, `projectId`, `fileId`, `version`, `userName`, `content`, `timestamp` (video seconds or null), `isResolved`, `createdAt`
+
+Định dạng và fields chi tiết có trong `src/stores/*` và được dùng trên client.
+
+## 🚧 Known limitations & security notes
+
+- Public read default có thể không phù hợp cho tài sản nhạy cảm — cân nhắc signed URLs / invite tokens.
+- No server-side virus scan currently — nếu bạn chấp nhận uploads từ nguồn không tin cậy, hãy thêm Cloud Function scan.
+- Realtime annotations live-sharing chưa được triển khai (hiện annotation là per-client + saved per comment). Nếu cần live-collaboration, kế hoạch là lưu action deltas vào Firestore hoặc một WebSocket service.
+
+## Tài liệu bổ sung
+
+- Báo cáo đánh giá chi tiết và đề xuất tính năng đã được tạo: `REPORT_DETAILED.md` (gốc repo) — chứa so sánh đối thủ, đề xuất 11 tính năng, và hướng tiếp theo.
+
+## Roadmap ngắn hạn (gợi ý từ scan)
+
+- [ ] Signed download URLs (Cloud Function)
+- [ ] Invite-only review links / tokenized links
+- [ ] Cloud Function để dọn dẹp attachments khi xóa
+- [ ] Threaded comments + soft-delete
+
+## License
 
 MIT
 
 ---
 
-**Lưu ý quan trọng:** Đây là base setup. Các tính năng viewer và upload sẽ được implement trong các phase tiếp theo. Hiện tại có thể chạy login/logout và routing cơ bản.
+Nếu bạn muốn, tôi có thể tiếp tục và:
+- chuyển README sang tiếng Anh; hoặc
+- tạo task breakdown + ước lượng giờ cho 3 tính năng ưu tiên (signed URLs, invite-only links, attachment cleanup).

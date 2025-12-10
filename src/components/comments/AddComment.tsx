@@ -437,8 +437,18 @@ export function AddComment({
                         disabled={submitting || !userName.trim() || (!content.trim() && attachments.length === 0)}
                         className="h-8 px-4"
                     >
-                        <Send className="w-3 h-3 mr-2" />
-                        Gửi
+                        {submitting ? (
+                            <span className="flex items-center">
+                                {/* Simple spinner using animate-spin */}
+                                <span className="mr-2 inline-block h-3 w-3 rounded-full border border-current border-t-transparent animate-spin" aria-hidden="true" />
+                                Đang gửi...
+                            </span>
+                        ) : (
+                            <span className="flex items-center">
+                                <Send className="w-3 h-3 mr-2" />
+                                Gửi
+                            </span>
+                        )}
                     </Button>
                 </div>
             </div>
