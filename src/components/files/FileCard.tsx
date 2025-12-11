@@ -85,8 +85,8 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
           </Badge>
         </div>
 
-        {/* Version badge */}
-        <div className="absolute top-2 right-2">
+        {/* Version badge - positioned at bottom-left to avoid selection checkbox */}
+        <div className="absolute bottom-2 left-2">
           <Badge 
             variant="outline" 
             className="text-xs backdrop-blur-sm bg-background/90 border-primary/30"
