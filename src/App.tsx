@@ -16,6 +16,7 @@ const ProjectsPage = lazy(() => import('./pages/admin/ProjectsPage'))
 const ProjectDetailPage = lazy(() => import('./pages/admin/ProjectDetailPage'))
 const ClientsPage = lazy(() => import('./pages/admin/ClientsPage'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage'))
+const IntroPage = lazy(() => import('./pages/IntroPage'))
 
 // Loading component
 const PageLoader = () => (
@@ -107,15 +108,11 @@ const router = createBrowserRouter([
   },
   {
     path: '/',
-    loader: () => {
-      // Check if in production environment
-      if (import.meta.env.PROD) {
-        window.location.href = 'http://manhhuynh.work'
-        return null
-      }
-      return null
-    },
-    element: <Navigate to="/login" replace />,
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <IntroPage />
+      </Suspense>
+    ),
   },
 ])
 
