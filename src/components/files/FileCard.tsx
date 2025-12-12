@@ -3,7 +3,7 @@ import type { File as FileType } from '@/types'
 import { format } from 'date-fns'
 import { formatFileSize } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { FileImage, Video, Box, MessageSquare, Clock } from 'lucide-react'
+import { FileImage, Video, Box, MessageSquare, Clock, ShieldAlert, Loader2 } from 'lucide-react'
 
 interface Props {
   file: FileType
@@ -33,6 +33,15 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
   const [imageError, setImageError] = useState(false)
 
   const renderThumbnail = () => {
+    // Hide thumbnail if infected
+    if (current?.validationStatus === 'infected') {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-destructive/10">
+          <ShieldAlert className="w-16 h-16 text-destructive/50" />
+        </div>
+      )
+    }
+
     if (file.type === 'image' && effectiveUrl && !imageError) {
       return (
         <img
@@ -70,7 +79,7 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
       {/* Thumbnail */}
       <div className="aspect-video bg-muted/20 relative overflow-hidden">
         {renderThumbnail()}
-        
+
         {/* Overlay on hover */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center">
           <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-sm font-medium">
@@ -87,8 +96,8 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
 
         {/* Version badge - positioned at bottom-left to avoid selection checkbox */}
         <div className="absolute bottom-2 left-2">
-          <Badge 
-            variant="outline" 
+          <Badge
+            variant="outline"
             className="text-xs backdrop-blur-sm bg-background/90 border-primary/30"
             title={`Phiên bản ${current?.version}${current?.versionLabel ? ` (${current.versionLabel})` : ''} - ${format(uploadDate, 'dd/MM/yy HH:mm')}`}
           >
@@ -105,12 +114,32 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
             </Badge>
           </div>
         )}
+
+        {/* Validation Status Overlay */}
+        {current?.validationStatus === 'infected' && (
+          <div className="absolute inset-0 bg-destructive/80 flex items-center justify-center backdrop-blur-sm z-20">
+            <div className="text-center text-white p-2">
+              <ShieldAlert className="w-8 h-8 mx-auto mb-1" />
+              <div className="text-xs font-bold">NGUY HIỂM</div>
+              <div className="text-[10px]">Phát hiện mã độc</div>
+            </div>
+          </div>
+        )}
+
+        {current?.validationStatus === 'pending' && (
+          <div className="absolute inset-0 bg-background/60 flex items-center justify-center backdrop-blur-sm z-10">
+            <div className="text-center">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
+              <div className="text-[10px] font-medium mt-1">Đang kiểm tra...</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Info */}
       <div className="p-3">
         <h3 className="font-medium text-sm truncate mb-2">{file.name}</h3>
-        
+
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{formatFileSize(current?.metadata?.size || 0)}</span>
           <span className="flex items-center gap-1">

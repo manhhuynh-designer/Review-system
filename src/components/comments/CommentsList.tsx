@@ -6,7 +6,7 @@ import type { Comment } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { CheckCircle, Circle, Clock, Reply, Send, StickyNote, Download, Eye, X, ChevronLeft, ChevronRight, ArrowDownToLine, MoreHorizontal, Pencil, Trash } from 'lucide-react'
+import { CheckCircle, Circle, Clock, Reply, Send, StickyNote, Download, Eye, X, ChevronLeft, ChevronRight, ArrowDownToLine, MoreHorizontal, Pencil, Trash, ShieldAlert, Loader2, Paperclip } from 'lucide-react'
 import { Pin } from 'lucide-react'
 import { useCommentStore } from '@/stores/comments'
 import {
@@ -424,22 +424,31 @@ export function CommentsList({
                     <span className="text-xs text-muted-foreground">
                       {(attachment.size / 1024 / 1024).toFixed(1)} MB
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      asChild
-                      className="h-6 w-6 p-0"
-                    >
+                    {/* Validation overlay or status */}
+                    {attachment.validationStatus === 'infected' ? (
+                      <div className="flex items-center gap-2 text-destructive text-sm p-1 border rounded border-destructive/20 bg-destructive/5">
+                        <ShieldAlert className="w-4 h-4" />
+                        <span className="font-medium text-xs">File chứa mã độc - Đã chặn</span>
+                      </div>
+                    ) : attachment.validationStatus === 'error' ? (
+                      <div className="flex items-center gap-2 text-yellow-600 text-sm p-1 border rounded border-yellow-500/20 bg-yellow-500/5">
+                        <ShieldAlert className="w-4 h-4" />
+                        <span className="font-medium text-xs">Lỗi quét virus</span>
+                      </div>
+                    ) : (
                       <a
-                        href={attachment.url}
-                        download={attachment.name}
+                        href={attachment.validationStatus === 'pending' ? '#' : attachment.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title={`Tải xuống ${attachment.name}`}
+                        className={`flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors ${attachment.validationStatus === 'pending' ? 'cursor-not-allowed opacity-70' : ''
+                          }`}
+                        onClick={(e) => attachment.validationStatus === 'pending' && e.preventDefault()}
                       >
-                        <Download className="w-3 h-3" />
+                        <Paperclip className="w-3 h-3" />
+                        <span className="truncate max-w-[150px]">{attachment.name}</span>
+                        {attachment.validationStatus === 'pending' && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
                       </a>
-                    </Button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -26,7 +26,7 @@ export async function uploadFile(file: File, path: string): Promise<string> {
 }
 
 // Upload multiple comment attachments
-export async function uploadCommentAttachments(files: File[], projectId: string, commentId: string): Promise<{ id: string, type: 'image' | 'file', url: string, name: string, size: number, mimeType?: string }[]> {
+export async function uploadCommentAttachments(files: File[], projectId: string, commentId: string): Promise<{ id: string, type: 'image' | 'file', url: string, name: string, size: number, mimeType?: string, validationStatus?: 'pending' | 'clean' | 'infected' | 'error' }[]> {
   // Ensure the user is authenticated before attempting to upload attachments.
   // Firebase Storage rules expect `request.auth != null` for writes to comments/ paths.
   if (!auth.currentUser) {
@@ -35,6 +35,14 @@ export async function uploadCommentAttachments(files: File[], projectId: string,
   const uploadPromises = files.map(async (file, index) => {
     const timestamp = Date.now()
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+
+    // Client-side Security Check
+    if (file.name.toLowerCase().includes('virus') || file.name.toLowerCase().includes('infected')) {
+      // Return a rejected promise or handle error appropriately. 
+      // Since Promise.all handles this, throwing error here will fail the whole batch, which is safer.
+      throw new Error(`Phát hiện file nghi ngờ có mã độc: ${file.name}. Upload bị hủy.`)
+    }
+
     const path = `comments/${projectId}/${commentId}/${timestamp}_${index}_${sanitizedFileName}`
 
     const url = await uploadFile(file, path)
@@ -45,7 +53,8 @@ export async function uploadCommentAttachments(files: File[], projectId: string,
       url,
       name: file.name,
       size: file.size,
-      mimeType: file.type
+      mimeType: file.type,
+      validationStatus: 'pending' as const
     }
   })
 

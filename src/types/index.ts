@@ -55,6 +55,7 @@ export interface FileVersion {
     height?: number
     duration?: number
   }
+  validationStatus?: 'pending' | 'clean' | 'infected' | 'error'
 }
 
 export interface File {
@@ -91,6 +92,7 @@ export interface Comment {
     name: string
     size: number
     mimeType?: string
+    validationStatus?: 'pending' | 'clean' | 'infected' | 'error'
   }[]
   isPending?: boolean // Optimistic UI state
   isEdited?: boolean

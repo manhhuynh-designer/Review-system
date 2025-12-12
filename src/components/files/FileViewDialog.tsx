@@ -10,18 +10,20 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Download, 
-  Clock, 
-  FileImage, 
-  Video, 
+import {
+  Download,
+  Clock,
+  FileImage,
+  Video,
   Box,
   ChevronDown,
   MessageSquare,
   Share2,
   Check,
   Copy,
-  MoreHorizontal
+  MoreHorizontal,
+  ShieldAlert,
+  Loader2
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -99,7 +101,7 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
   const current = file.versions.find(v => v.version === file.currentVersion) || file.versions[0]
   const effectiveUrl = resolvedUrl || current?.url
   const uploadDate = current?.uploadedAt?.toDate ? current.uploadedAt.toDate() : new Date()
-  
+
   const fileComments = comments.filter(c => c.fileId === file.id && c.version === file.currentVersion)
 
   const handleUserNameChange = (name: string) => {
@@ -121,6 +123,41 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
           <div className="text-center text-muted-foreground">
             <div className="text-4xl mb-2">📄</div>
             <div>Không thể tải file</div>
+          </div>
+        </div>
+      )
+    }
+
+    // Check validation status
+    if (current?.validationStatus === 'infected') {
+      return (
+        <div className="aspect-video bg-destructive/10 flex items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <ShieldAlert className="w-16 h-16 text-destructive mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-destructive mb-2">FILE CÓ MÃ ĐỘC</h3>
+            <p className="text-muted-foreground text-sm">
+              Hệ thống phát hiện file này có chứa mã độc hoặc vi phạm chính sách bảo mật.
+              Để đảm bảo an toàn, file này đã bị chặn và không thể xem.
+            </p>
+          </div>
+        </div>
+      )
+    }
+
+    if (current?.validationStatus === 'pending') {
+      return (
+        <div className="aspect-video bg-muted/20 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="relative w-16 h-16 mx-auto">
+              <Loader2 className="w-16 h-16 animate-spin text-primary" />
+            </div>
+            <div>
+              <h3 className="font-medium text-lg">Đang kiểm tra bảo mật...</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Hệ thống đang quét virus và kiểm tra định dạng file.
+                <br />Vui lòng đợi trong giây lát.
+              </p>
+            </div>
           </div>
         </div>
       )
@@ -253,9 +290,9 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Input 
-                        readOnly 
-                        value={getShareLink()} 
+                      <Input
+                        readOnly
+                        value={getShareLink()}
                         className="text-xs h-8"
                       />
                       <Button size="sm" className="h-8 px-2" onClick={copyShareLink}>
@@ -370,7 +407,7 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
                   <AddComment
                     userName={currentUserName}
                     onUserNameChange={handleUserNameChange}
-                    onSubmit={(userName, content, timestamp, parentId, annotationData) => 
+                    onSubmit={(userName, content, timestamp, parentId, annotationData) =>
                       addComment(projectId, file.id, file.currentVersion, userName, content, timestamp, parentId, annotationData)
                     }
                     currentTimestamp={file.type === 'video' ? currentTime : undefined}

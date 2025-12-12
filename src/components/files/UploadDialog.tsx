@@ -16,11 +16,18 @@ interface UploadDialogProps {
   projectId: string
   existingFileId?: string
   trigger?: React.ReactNode
+  initialFiles?: File[]
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function UploadDialog({ projectId, existingFileId, trigger }: UploadDialogProps) {
-  const [open, setOpen] = useState(false)
+export function UploadDialog({ projectId, existingFileId, trigger, initialFiles, open: controlledOpen, onOpenChange: setControlledOpen }: UploadDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('single')
+
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled ? setControlledOpen! : setInternalOpen
 
   const handleUploadComplete = () => {
     setOpen(false)
@@ -53,7 +60,7 @@ export function UploadDialog({ projectId, existingFileId, trigger }: UploadDialo
             {existingFileId ? 'Tải phiên bản mới' : 'Tải tài liệu lên'}
           </DialogTitle>
         </DialogHeader>
-        
+
         {!existingFileId && (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -66,30 +73,32 @@ export function UploadDialog({ projectId, existingFileId, trigger }: UploadDialo
                 Image Sequence
               </TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="single" className="mt-4">
-              <FileUploader 
-                projectId={projectId} 
+              <FileUploader
+                projectId={projectId}
                 existingFileId={existingFileId}
                 onUploadComplete={handleUploadComplete}
+                initialFiles={initialFiles}
               />
             </TabsContent>
-            
+
             <TabsContent value="sequence" className="mt-4">
-              <SequenceUploader 
+              <SequenceUploader
                 projectId={projectId}
                 onUploadComplete={handleUploadComplete}
               />
             </TabsContent>
           </Tabs>
         )}
-        
+
         {existingFileId && (
           <div className="space-y-4">
-            <FileUploader 
-              projectId={projectId} 
+            <FileUploader
+              projectId={projectId}
               existingFileId={existingFileId}
               onUploadComplete={handleUploadComplete}
+              initialFiles={initialFiles}
             />
           </div>
         )}

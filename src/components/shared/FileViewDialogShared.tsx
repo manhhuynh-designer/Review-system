@@ -33,7 +33,8 @@ import {
   FileText,
   HelpCircle,
   Share2,
-  Copy
+  Copy,
+  ShieldAlert
 } from 'lucide-react'
 import { startFileTour, hasSeenTour } from '@/lib/fileTours'
 import {
@@ -42,6 +43,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { UploadDialog } from '@/components/files/UploadDialog'
 import {
   Popover,
   PopoverContent,
@@ -141,7 +143,7 @@ export function FileViewDialogShared({
   const [currentAnnotationCommentId, setCurrentAnnotationCommentId] = useState<string | null>(null)
 
   const customVideoPlayerRef = useRef<CustomVideoPlayerRef>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const glbViewerRef = useRef<GLBViewerRef>(null)
   const [compareMode, setCompareMode] = useState(false)
   const [leftVersion, setLeftVersion] = useState<number | null>(null)
@@ -171,6 +173,12 @@ export function FileViewDialogShared({
   const [commentWidth, setCommentWidth] = useState(350)
   const [isResizing, setIsResizing] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  // Upload & Drag-n-Drop State
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
+
   const resizingState = useRef({ startX: 0, startWidth: 350 })
 
   // Generate shareable link for this file
@@ -203,7 +211,7 @@ export function FileViewDialogShared({
 
   useEffect(() => {
     if (open && file) {
-      ;(async () => {
+      ; (async () => {
         const seen = await hasSeenTour(file.type as any)
         if (!seen) {
           // Delay slightly to wait for dialog animation/render
@@ -258,6 +266,35 @@ export function FileViewDialogShared({
     }
   }, [file?.currentVersion, file?.id])
 
+  // Drag and Drop Handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragOver) setIsDragOver(true)
+  }, [isDragOver])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set to false if we're leaving the main container
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setIsDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) {
+      // Check if file type matches (optional, but good UX)
+      // For now, just pass to upload dialog which has its own validation
+      setDroppedFiles(files)
+      setShowUploadDialog(true)
+    }
+  }, [])
+
   if (!file) return null
 
   const current = file.versions.find(v => v.version === currentVersion) || file.versions[0]
@@ -275,19 +312,19 @@ export function FileViewDialogShared({
     // Try to extract from URL first (works for direct storage paths)
     // Firebase URLs often have format: ...%2Ffilename.ext?alt=media&token=...
     let urlMatch = url.match(/\.([^./?#]+)(?=[?#]|$)/)
-    
+
     if (!urlMatch && url.includes('%2F')) {
       // Try to find extension in encoded URL path
       const decoded = decodeURIComponent(url.split('?')[0])
       urlMatch = decoded.match(/\.([^./?#]+)$/)
     }
-    
+
     if (urlMatch) {
       const ext = urlMatch[1].toLowerCase()
       if (ext === 'jpeg') return '.jpg'
       return `.${ext}`
     }
-    
+
     // Try from MIME type
     if (mimeType) {
       const mimeMap: Record<string, string> = {
@@ -306,16 +343,16 @@ export function FileViewDialogShared({
         'model/gltf+json': '.gltf',
         'application/octet-stream': ''
       }
-      
+
       if (mimeMap[mimeType]) return mimeMap[mimeType]
-      
+
       // Fallback to extracting from MIME type
       const ext = mimeType.split('/')[1]?.split('+')[0]?.split(';')[0]
       if (ext && ext !== 'octet-stream') {
         return `.${ext.replace('jpeg', 'jpg')}`
       }
     }
-    
+
     // Fallback based on file type
     const typeMap: Record<string, string> = {
       'image': '.jpg',
@@ -324,7 +361,7 @@ export function FileViewDialogShared({
       'model': '.glb',
       'sequence': '.jpg'
     }
-    
+
     return typeMap[fileType || ''] || ''
   }
 
@@ -332,20 +369,20 @@ export function FileViewDialogShared({
   const ensureFileExtension = (filename: string, url: string, mimeType?: string, fileType?: string): string => {
     // Extract the extension we want to use
     const correctExt = getFileExtension(url, mimeType, fileType)
-    
+
     if (!correctExt) {
       // No extension found anywhere, return as is
       return filename
     }
-    
+
     // Check if filename already has the correct extension
     const hasExtension = /\.[a-zA-Z0-9]+$/.test(filename)
-    
+
     if (hasExtension) {
       // Replace existing extension with the correct one
       return filename.replace(/\.[^.]+$/, correctExt)
     }
-    
+
     // Add extension if not present
     return `${filename}${correctExt}`
   }
@@ -694,6 +731,45 @@ export function FileViewDialogShared({
           <div className="text-center text-muted-foreground">
             <div className="text-4xl mb-2">📄</div>
             <div>Không thể tải file</div>
+          </div>
+        </div>
+      )
+    }
+
+    // Check validation status
+    if (current?.validationStatus === 'infected') {
+      return (
+        <div className="aspect-video bg-destructive/10 flex items-center justify-center p-6 h-full min-h-[50vh]">
+          <div className="text-center max-w-md">
+            <ShieldAlert className="w-16 h-16 text-destructive mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-destructive mb-2">FILE CÓ MÃ ĐỘC</h3>
+            <p className="text-muted-foreground text-sm">
+              Hệ thống phát hiện file này có chứa mã độc hoặc vi phạm chính sách bảo mật.
+              Để đảm bảo an toàn, file này đã bị chặn và không thể xem.
+            </p>
+          </div>
+        </div>
+      )
+    }
+
+
+    // NOTE: 'pending' status no longer blocks viewing. Validation runs in background.
+    // Only 'infected' and 'error' block the view.
+
+    if (current?.validationStatus === 'error') {
+      return (
+        <div className="aspect-video bg-muted/20 flex items-center justify-center h-full min-h-[50vh]">
+          <div className="text-center space-y-4 max-w-md p-6">
+            <div className="relative w-16 h-16 mx-auto">
+              <ShieldAlert className="w-16 h-16 text-yellow-500" />
+            </div>
+            <div>
+              <h3 className="font-medium text-lg text-yellow-600">Lỗi kiểm tra bảo mật</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Không thể hoàn tất quét virus cho file này.
+                Để đảm bảo an toàn, vui lòng thử tải lại hoặc liên hệ quản trị viên.
+              </p>
+            </div>
           </div>
         </div>
       )
@@ -1185,7 +1261,12 @@ export function FileViewDialogShared({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[100vw] sm:max-w-[98vw] w-full h-[100vh] sm:h-[98vh] xl:h-[95vh] 2xl:h-[90vh] flex flex-col p-0 gap-0 [&>button]:hidden">
+        <DialogContent
+          className="max-w-[100vw] sm:max-w-[98vw] w-full h-[100vh] sm:h-[98vh] xl:h-[95vh] 2xl:h-[90vh] flex flex-col p-0 gap-0 [&>button]:hidden outline-none"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 flex flex-row items-center justify-between space-y-0 group">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
@@ -1271,72 +1352,74 @@ export function FileViewDialogShared({
             <div className="flex items-center gap-1 sm:gap-2">
               {/* Version Selector - Hidden on mobile, available in menu */}
               <div className="hidden sm:block">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Clock className="w-4 h-4" />
-                      <span className="hidden md:inline">Lịch sử phiên bản</span>
-                      <span className="md:hidden">Lịch sử</span>
-                      <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-80">
-                    {file.versions
-                      .sort((a, b) => b.version - a.version)
-                      .map((version) => (
-                        <DropdownMenuItem
-                          key={version.version}
-                          className="flex items-center justify-between p-3 cursor-pointer"
-                          onClick={() => onSwitchVersion?.(file.id, version.version)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${version.version === currentVersion
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground'
-                              }`}>
-                              v{version.version}
-                            </div>
-                            <div>
-                              <div className="font-medium">
-                                {version.version === currentVersion ? 'Phiên bản hiện tại' : `Phiên bản ${version.version}`}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {format(version.uploadedAt?.toDate ? version.uploadedAt.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
-                              </div>
-                            </div>
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
+                <div className="flex items-center gap-2">
+                  {onUploadNewVersion && (
+                    <UploadDialog
+                      projectId={_projectId}
+                      existingFileId={file.id}
+                      trigger={
+                        <Button variant="outline" size="sm" className="gap-2 bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary hover:text-primary">
+                          <Upload className="w-4 h-4" />
+                          <span className="hidden lg:inline">Thêm phiên bản</span>
+                        </Button>
+                      }
+                    />
+                  )}
 
-                    {onUploadNewVersion && (
-                      <>
-                        <div className="h-px bg-border my-1" />
-                        <div className="p-2">
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            aria-label="Upload new version"
-                            onChange={(e) => {
-                              const uploadedFile = e.target.files?.[0]
-                              if (uploadedFile && onUploadNewVersion) {
-                                onUploadNewVersion(uploadedFile, file.id)
-                              }
-                            }}
-                          />
-                          <Button
-                            className="w-full justify-start"
-                            variant="ghost"
-                            onClick={() => fileInputRef.current?.click()}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Clock className="w-4 h-4" />
+                        <span className="hidden md:inline">Lịch sử</span>
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-80">
+                      {file.versions
+                        .sort((a, b) => b.version - a.version)
+                        .map((version) => (
+                          <DropdownMenuItem
+                            key={version.version}
+                            className="flex items-center justify-between p-3 cursor-pointer"
+                            onClick={() => onSwitchVersion?.(file.id, version.version)}
                           >
-                            <Upload className="w-4 h-4 mr-2" />
-                            Tải lên phiên bản mới
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${version.version === currentVersion
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground'
+                                }`}>
+                                v{version.version}
+                              </div>
+                              <div>
+                                <div className="font-medium">
+                                  {version.version === currentVersion ? 'Phiên bản hiện tại' : `Phiên bản ${version.version}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {format(version.uploadedAt?.toDate ? version.uploadedAt.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
+                                </div>
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+
+                      {onUploadNewVersion && (
+                        <>
+                          <div className="h-px bg-border my-1" />
+                          <div className="p-2">
+                            <Button
+                              className="w-full justify-start"
+                              variant="ghost"
+                              onClick={() => setShowUploadDialog(true)}
+                            >
+                              <Upload className="w-4 h-4 mr-2" />
+                              Tải lên phiên bản mới
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               {/* Mobile: Dropdown Menu with all actions */}
@@ -1390,10 +1473,10 @@ export function FileViewDialogShared({
                     )}
 
                     <DropdownMenuItem asChild>
-                      <a 
-                        href={effectiveUrl} 
+                      <a
+                        href={effectiveUrl}
                         download={ensureFileExtension(file.name, effectiveUrl, current?.metadata?.type, file.type)}
-                        target="_blank" 
+                        target="_blank"
                         rel="noreferrer"
                       >
                         <Download className="w-4 h-4 mr-2" />
@@ -1449,10 +1532,10 @@ export function FileViewDialogShared({
               )}
 
               <Button variant="outline" size="sm" asChild className="hidden sm:flex">
-                <a 
-                  href={effectiveUrl} 
+                <a
+                  href={effectiveUrl}
                   download={ensureFileExtension(file.name, effectiveUrl, current?.metadata?.type, file.type)}
-                  target="_blank" 
+                  target="_blank"
                   rel="noreferrer"
                 >
                   <Download className="w-4 h-4 mr-2" />
@@ -1478,9 +1561,9 @@ export function FileViewDialogShared({
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Input 
-                        readOnly 
-                        value={getShareLink()} 
+                      <Input
+                        readOnly
+                        value={getShareLink()}
                         className="text-xs h-8"
                       />
                       <Button size="sm" className="h-8 px-2" onClick={copyShareLink}>
@@ -1778,6 +1861,30 @@ export function FileViewDialogShared({
           )
         })()
       }
+      {/* Upload Dialog for New Version */}
+      <UploadDialog
+        projectId={_projectId}
+        existingFileId={file.id}
+        open={showUploadDialog}
+        onOpenChange={setShowUploadDialog}
+        initialFiles={droppedFiles}
+        trigger={<span className="hidden" />}
+      />
+
+      {/* Drag & Drop Overlay */}
+      {isDragOver && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center border-4 border-primary border-dashed rounded-lg m-4 pointer-events-none">
+          <div className="bg-primary/10 p-8 rounded-full mb-6 animate-bounce">
+            <Upload className="w-16 h-16 text-primary" />
+          </div>
+          <h3 className="text-3xl font-bold text-primary mb-2">
+            Thả file để cập nhật phiên bản mới
+          </h3>
+          <p className="text-lg text-muted-foreground">
+            Phiên bản mới sẽ được thêm vào lịch sử phiên bản của file này
+          </p>
+        </div>
+      )}
     </>
   )
 }

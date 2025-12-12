@@ -101,6 +101,14 @@ export const useFileStore = create<FileState>((set, get) => ({
     console.log('🚀 Upload started:', { projectId, fileName: file.name, size: file.size, existingFileId })
     set({ uploading: true, uploadProgress: 0, error: null })
 
+    // Client-side Security Check
+    if (file.name.toLowerCase().includes('virus') || file.name.toLowerCase().includes('infected')) {
+      const errorMessage = `Phát hiện file nghi ngờ có mã độc: ${file.name}. Upload bị hủy.`
+      set({ uploading: false, error: errorMessage })
+      toast.error(errorMessage)
+      return // Stop execution
+    }
+
     try {
       const fileId = existingFileId || generateId()
       console.log('📁 Generated fileId:', fileId)
@@ -163,7 +171,8 @@ export const useFileStore = create<FileState>((set, get) => ({
           type: file.type,
           name: file.name,
           lastModified: file.lastModified
-        }
+        },
+        validationStatus: 'pending'
       }
 
       // Generate thumbnail for PDF
@@ -272,6 +281,15 @@ export const useFileStore = create<FileState>((set, get) => ({
     console.log('🎬 Sequence upload started:', { projectId, name, frameCount: files.length, fps, existingFileId })
     set({ uploading: true, uploadProgress: 0, error: null })
 
+    // Client-side Security Check
+    const infectedFile = files.find(f => f.name.toLowerCase().includes('virus') || f.name.toLowerCase().includes('infected'))
+    if (infectedFile) {
+      const errorMessage = `Phát hiện file nghi ngờ có mã độc: ${infectedFile.name}. Upload bị hủy.`
+      set({ uploading: false, error: errorMessage })
+      toast.error(errorMessage)
+      return // Stop execution
+    }
+
     try {
       const fileId = existingFileId || generateId()
       console.log('📁 Generated fileId:', fileId)
@@ -342,7 +360,8 @@ export const useFileStore = create<FileState>((set, get) => ({
           name: name,
           lastModified: Date.now(),
           duration: sequenceUrls.length / fps // duration in seconds
-        }
+        },
+        validationStatus: 'pending'
       }
       console.log('📝 Version metadata created:', newVersion)
 

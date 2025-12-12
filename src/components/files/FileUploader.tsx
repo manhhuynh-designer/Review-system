@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useFileStore } from '@/stores/files'
@@ -9,6 +9,7 @@ interface FileUploaderProps {
   projectId: string
   existingFileId?: string
   onUploadComplete?: () => void
+  initialFiles?: File[]
 }
 
 interface FileUploadStatus {
@@ -38,12 +39,22 @@ const ALLOWED_TYPES = {
   'application/pdf': '.pdf'
 }
 
-export function FileUploader({ projectId, existingFileId, onUploadComplete }: FileUploaderProps) {
+export function FileUploader({ projectId, existingFileId, onUploadComplete, initialFiles }: FileUploaderProps) {
   const { uploadFile, uploadProgress } = useFileStore()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadQueue, setUploadQueue] = useState<FileUploadStatus[]>([])
+
+  // Initialize queue with initialFiles if provided
+  const [uploadQueue, setUploadQueue] = useState<FileUploadStatus[]>(() => {
+    if (!initialFiles || initialFiles.length === 0) return []
+    return initialFiles.map(file => ({
+      file,
+      status: 'pending',
+      progress: 0
+    }))
+  })
+
   const [isUploading, setIsUploading] = useState(false)
   const [currentUploadIndex, setCurrentUploadIndex] = useState(-1)
 
@@ -69,6 +80,20 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
 
     return null
   }
+
+  // Auto-process initial files
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0 && uploadQueue.length > 0 && !isUploading && currentUploadIndex === -1) {
+      processFiles(initialFiles)
+    }
+  }, []) // Run once on mount
+
+  // Auto-process initial files
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0 && uploadQueue.length > 0 && !isUploading && currentUploadIndex === -1) {
+      processFiles(initialFiles)
+    }
+  }, []) // Run once on mount
 
   const processFiles = async (files: File[]) => {
     if (files.length === 0) return
@@ -110,22 +135,22 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
       const item = validFiles[i]
 
       // Update status to uploading
-      setUploadQueue(prev => prev.map((f, idx) => 
+      setUploadQueue(prev => prev.map((f, idx) =>
         idx === i ? { ...f, status: 'uploading' } : f
       ))
 
       try {
         console.log(`🎯 Uploading file ${i + 1}/${validFiles.length}: ${item.file.name}`)
         await uploadFile(projectId, item.file, existingFileId)
-        
+
         // Update status to success
-        setUploadQueue(prev => prev.map((f, idx) => 
+        setUploadQueue(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'success', progress: 100 } : f
         ))
         console.log(`✅ File ${i + 1}/${validFiles.length} uploaded successfully`)
       } catch (err: any) {
         console.error(`💥 Upload error for ${item.file.name}:`, err)
-        setUploadQueue(prev => prev.map((f, idx) => 
+        setUploadQueue(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'error', error: err.message || 'Upload thất bại' } : f
         ))
       }
@@ -235,18 +260,17 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
                 Xóa tất cả
               </Button>
             </div>
-            
+
             {/* File List */}
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {uploadQueue.map((item, idx) => (
-                <div 
+                <div
                   key={idx}
-                  className={`flex items-center gap-3 p-3 rounded-lg border ${
-                    item.status === 'success' ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900/30' :
+                  className={`flex items-center gap-3 p-3 rounded-lg border ${item.status === 'success' ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900/30' :
                     item.status === 'error' ? 'bg-destructive/10 border-destructive/20' :
-                    item.status === 'uploading' ? 'bg-primary/5 border-primary/20' :
-                    'bg-muted/30 border-border'
-                  }`}
+                      item.status === 'uploading' ? 'bg-primary/5 border-primary/20' :
+                        'bg-muted/30 border-border'
+                    }`}
                 >
                   {item.status === 'success' ? (
                     <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
@@ -257,7 +281,7 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
                   ) : (
                     <FileIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   )}
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="text-sm truncate">{item.file.name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -265,11 +289,11 @@ export function FileUploader({ projectId, existingFileId, onUploadComplete }: Fi
                       {item.error && <span className="text-destructive ml-2">{item.error}</span>}
                     </div>
                   </div>
-                  
+
                   {item.status !== 'uploading' && (
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       onClick={() => removeFromQueue(idx)}
                       className="h-6 w-6 p-0"
                     >
