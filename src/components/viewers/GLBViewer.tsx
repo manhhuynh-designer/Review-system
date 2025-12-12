@@ -2,9 +2,11 @@ import { useState, useRef, Suspense, forwardRef, useImperativeHandle, useLayoutE
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Environment, Html, useGLTF, Center, useMatcapTexture } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
-import { Rotate3d, Box, Sun, Moon, RefreshCcw, Lightbulb, Camera, Circle } from 'lucide-react'
+import { Rotate3d, Box, Sun, Moon, RefreshCcw, Lightbulb, Camera, Circle, View } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
+import { ARViewer } from './ARViewer'
+import type { ARViewerRef } from './ARViewer'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -221,7 +223,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
   // Close dropdowns on window resize for better responsive behavior
   useEffect(() => {
     let resizeTimeout: NodeJS.Timeout
-    
+
     const handleResize = () => {
       clearTimeout(resizeTimeout)
       resizeTimeout = setTimeout(() => {
@@ -239,6 +241,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
   }, [])
 
   const internalRef = useRef<GLBViewerRef>(null)
+  const arViewerRef = useRef<ARViewerRef>(null)
 
   useImperativeHandle(ref, () => ({
     getCameraState: () => internalRef.current?.getCameraState() ?? null,
@@ -315,12 +318,26 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
             initialCameraState={initialCameraState}
           />
         </Suspense>
-      </Canvas>
+      </Canvas >
+
+      <ARViewer ref={arViewerRef} url={url} />
 
       {/* Desktop Floating Toolbar - Hidden on mobile when showMobileToolbar is true */}
       <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex-col sm:flex-row items-center gap-2 sm:gap-1 ${showMobileToolbar ? 'hidden sm:flex' : 'flex'}`}>
         {/* Main Toolbar */}
         <div className="glb-toolbar flex items-center gap-1 p-1.5 rounded-full bg-background/90 backdrop-blur border shadow-lg transition-opacity opacity-0 group-hover:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={() => arViewerRef.current?.activateAR()}
+            title="Xem trong thực tế (AR)"
+          >
+            <View className="h-4 w-4" />
+          </Button>
+
+          <div className="w-px h-4 bg-border mx-1" />
+
           <Button
             variant={autoRotate ? "secondary" : "ghost"}
             id="model-auto-rotate"
@@ -511,9 +528,10 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
       </div>
 
       {/* Mobile Toolbar - Inside viewport at bottom center */}
-      {showMobileToolbar && (
-        <div id="mobile-3d-toolbar" className="sm:hidden absolute bottom-2 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center gap-1 p-1.5 bg-background/95 backdrop-blur border rounded-full shadow-lg">
+      {
+        showMobileToolbar && (
+          <div id="mobile-3d-toolbar" className="sm:hidden absolute bottom-2 left-1/2 -translate-x-1/2 z-50">
+            <div className="flex items-center gap-1 p-1.5 bg-background/95 backdrop-blur border rounded-full shadow-lg">
               <Button
                 id="mobile-model-auto-rotate"
                 variant={autoRotate ? "secondary" : "ghost"}
@@ -523,6 +541,16 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
                 title="Tự động xoay"
               >
                 <Rotate3d className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-full"
+                onClick={() => arViewerRef.current?.activateAR()}
+                title="Xem AR"
+              >
+                <View className="h-4 w-4" />
               </Button>
 
               <DropdownMenu>
@@ -680,10 +708,11 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({ url, autoRo
               >
                 <RefreshCcw className="h-4 w-4" />
               </Button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 })
 GLBViewer.displayName = 'GLBViewer'
