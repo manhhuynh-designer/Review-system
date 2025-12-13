@@ -1,7 +1,8 @@
 
 import { useState } from 'react'
-import { ArrowLeft, CheckCircle2, GitBranch, Shield, Zap, Globe } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, GitBranch, Shield, Zap, Globe, Coffee } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ParallaxBackground } from '@/components/ui/ParallaxBackground'
 
 type Lang = 'vi' | 'en'
 
@@ -13,6 +14,7 @@ const translations = {
         keyFeatures: 'Tính năng Chính',
         footer: '© 2025 Mạnh Huỳnh. Phần mềm Mã nguồn mở.',
         viewOnGithub: 'Xem trên GitHub',
+        buyMeACoffee: 'Mời tôi một ly cà phê',
         features: [
             {
                 title: 'Hỗ trợ Đa định dạng',
@@ -47,6 +49,7 @@ const translations = {
         keyFeatures: 'Key Features',
         footer: '© 2025 Mạnh Huỳnh. Open Source Software.',
         viewOnGithub: 'View on GitHub',
+        buyMeACoffee: 'Buy me a coffee',
         features: [
             {
                 title: 'Multi-Format Support',
@@ -92,9 +95,11 @@ export default function IntroPage() {
     const toggleLang = () => setLang(prev => prev === 'vi' ? 'en' : 'vi')
 
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col font-sans relative">
+        <div className="min-h-screen bg-background/50 text-foreground flex flex-col font-sans relative overflow-hidden">
+            <ParallaxBackground />
+
             {/* Language Switcher */}
-            <div className="absolute top-6 right-6 z-10">
+            <div className="absolute top-6 right-6 z-20">
                 <Button
                     variant="outline"
                     size="sm"
@@ -107,7 +112,7 @@ export default function IntroPage() {
             </div>
 
             {/* Hero Section */}
-            <header className="py-20 px-6 md:px-12 text-center max-w-5xl mx-auto space-y-6">
+            <header className="py-20 px-6 md:px-12 text-center max-w-5xl mx-auto space-y-6 relative z-10">
                 <div className="inline-block p-3 bg-primary/10 rounded-full mb-4">
                     <Zap className="w-8 h-8 text-primary" />
                 </div>
@@ -130,7 +135,7 @@ export default function IntroPage() {
             </header>
 
             {/* Features Grid */}
-            <main className="flex-1 bg-secondary/30 py-16 px-6 md:px-12">
+            <main className="flex-1 bg-secondary/30 backdrop-blur-sm py-16 px-6 md:px-12 relative z-10">
                 <div className="max-w-6xl mx-auto">
                     <h2 className="text-3xl font-bold text-center mb-12">{t.keyFeatures}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -147,13 +152,28 @@ export default function IntroPage() {
             </main>
 
             {/* Footer */}
-            <footer className="py-8 text-center text-muted-foreground text-sm border-t border-border">
+            <footer className="py-8 text-center text-muted-foreground text-sm border-t border-border relative z-10 bg-background/80 backdrop-blur-lg">
                 <p>{t.footer}</p>
-                <p className="mt-2">
-                    <a href="https://github.com/Manh-Huynh-Opensource/Review-system" className="hover:underline hover:text-primary transition-colors">
+                <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
+                    <a
+                        href="https://github.com/Manh-Huynh-Opensource/Review-system"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline hover:text-primary transition-colors flex items-center gap-2"
+                    >
+                        <GitBranch className="w-4 h-4" />
                         {t.viewOnGithub}
                     </a>
-                </p>
+                    <a
+                        href="https://coffee.manhhuynh.work"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:scale-105 transition-transform flex items-center gap-2 font-medium text-amber-600 hover:text-amber-700 bg-amber-50 dark:bg-amber-950/30 px-4 py-2 rounded-full border border-amber-200 dark:border-amber-800"
+                    >
+                        <Coffee className="w-4 h-4" />
+                        {t.buyMeACoffee}
+                    </a>
+                </div>
             </footer>
         </div>
     )

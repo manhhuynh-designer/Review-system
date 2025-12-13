@@ -3,6 +3,7 @@
 A web application for reviewing creative assets (images, videos, image sequences, PDFs, and 3D models) with annotation tools, timestamped comments for videos, and version management.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FFDD00.svg)](https://coffee.manhhuynh.work)
 
 ## ✨ Features
 
@@ -103,3 +104,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Author
 
 **Mạnh Huỳnh**
+
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://coffee.manhhuynh.work)
