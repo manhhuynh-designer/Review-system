@@ -1091,14 +1091,7 @@ export function FileViewDialogShared({
         }
       }
 
-      const handleExportFrame = (dataUrl: string, timestamp: number) => {
-        // Download the image
-        const link = document.createElement('a')
-        const formattedTime = `${Math.floor(timestamp / 60)}-${Math.floor(timestamp % 60).toString().padStart(2, '0')}`
-        link.download = `${file.name.replace(/\.[^/.]+$/, '')}-frame-${formattedTime}.png`
-        link.href = dataUrl
-        link.click()
-      }
+
 
       // Marker navigation handlers
       const sortedMarkers = allFileComments
@@ -1144,7 +1137,7 @@ export function FileViewDialogShared({
               onCommentMarkerClick={handleCommentMarkerClick}
               onFullscreenChange={handleFullscreenChange}
               onLoadedMetadata={handleLoadedMetadata}
-              onExportFrame={handleExportFrame}
+
               onPlay={handleVideoPlay}
               onPause={handleVideoPause}
               className="w-full h-full"

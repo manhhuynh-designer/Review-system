@@ -192,8 +192,8 @@ export async function startFileTour({ fileType, isMobile }: TourOptions) {
         {
           element: '#video-controls-export',
           popover: {
-            title: 'Xuất Frame',
-            description: 'Nhấn vào đây để xuất ảnh PNG của frame hiện tại.',
+            title: 'Sao chép Frame',
+            description: 'Nhấn vào đây để lưu ảnh frame hiện tại vào bộ nhớ tạm (clipboard).',
             side: 'top',
             align: 'center'
           }

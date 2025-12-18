@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback, memo } from 'react'
 import { Play, Pause, Volume2, VolumeX, Maximize, StickyNote, Camera } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import type { Comment } from '@/types'
 import './CustomVideoPlayer.css'
 import {
@@ -268,44 +269,36 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-            // Convert to blob instead of dataURL to avoid CORS issues
-            canvas.toBlob((blob) => {
+            // Convert to blob
+            canvas.toBlob(async (blob) => {
                 if (!blob) {
-                    alert('Không thể xuất frame. Vui lòng thử lại.')
+                    toast.error('Không thể xuất frame. Vui lòng thử lại.')
                     return
                 }
 
-                // Create object URL from blob
-                const url = URL.createObjectURL(blob)
-
-                // Get current timestamp for filename
-                const currentTimestamp = video.currentTime
-                const timestamp = formatTime(currentTimestamp).replace(':', '-')
-
-                // Callback with blob URL or download directly
+                // If callback provided (rare case usually for parents), use it
                 if (onExportFrame) {
-                    // For callback, we still need to convert to dataURL
                     const reader = new FileReader()
                     reader.onloadend = () => {
-                        onExportFrame(reader.result as string, currentTimestamp)
+                        onExportFrame(reader.result as string, video.currentTime)
                     }
                     reader.readAsDataURL(blob)
-                } else {
-                    // Default behavior: download the image directly
-                    const link = document.createElement('a')
-                    link.download = `frame-${timestamp}.png`
-                    link.href = url
-                    document.body.appendChild(link)
-                    link.click()
-                    document.body.removeChild(link)
+                    return
+                }
 
-                    // Clean up the object URL after download
-                    setTimeout(() => URL.revokeObjectURL(url), 100)
+                // Copy to clipboard
+                try {
+                    const item = new ClipboardItem({ 'image/png': blob })
+                    await navigator.clipboard.write([item])
+                    toast.success('Đã lưu frame vào clipboard')
+                } catch (err) {
+                    console.error('Clipboard write failed:', err)
+                    toast.error('Không thể lưu vào clipboard')
                 }
             }, 'image/png')
         } catch (error) {
             console.error('Failed to export frame:', error)
-            alert('Không thể xuất frame. Vui lòng thử lại.')
+            toast.error('Không thể xuất frame. Vui lòng thử lại.')
         }
     }, [onExportFrame])
 
