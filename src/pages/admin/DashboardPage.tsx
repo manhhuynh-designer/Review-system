@@ -18,6 +18,7 @@ import type { File as FileType, Comment } from '@/types'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
 import { DownloadProgressDialog } from '@/components/dashboard/DownloadProgressDialog'
+import { useBulkDownload } from '@/hooks/useBulkDownload'
 
 interface FileWithProject extends FileType {
     projectName?: string
@@ -122,13 +123,32 @@ export default function DashboardPage() {
     // File view mode: 'active' or 'trash'
     const [fileViewMode, setFileViewMode] = useState<'active' | 'trash'>('active')
 
-    // Download progress state
-    const [isDownloading, setIsDownloading] = useState(false)
-    const [downloadProgress, setDownloadProgress] = useState(0)
-    const [downloadMessage, setDownloadMessage] = useState('')
-    const [currentDownloadFile, setCurrentDownloadFile] = useState('')
+    // Local state for specific Dashboard export
+    const [isExporting, setIsExporting] = useState(false)
+    const [exportProgress, setExportProgress] = useState(0)
+    const [exportMessage, setExportMessage] = useState('')
+    const [currentExportFile, setCurrentExportFile] = useState('')
 
-    // File view dialog state for comment click
+    // Use bulk download hook
+    const {
+        handleBulkDownload: executeBulkDownload,
+        isDownloading: isBulkDownloading,
+        downloadProgress: bulkProgress,
+        downloadMessage: bulkMessage,
+        currentDownloadFile: bulkCurrentFile
+    } = useBulkDownload()
+
+    const handleBulkDownload = async (filesToDownload: FileWithProject[]) => {
+        // Pass comments to include in the zip
+        await executeBulkDownload(filesToDownload, comments)
+    }
+
+    // Consolidated state for dialog
+    const isBusy = isExporting || isBulkDownloading
+    const progress = isExporting ? exportProgress : bulkProgress
+    const message = isExporting ? exportMessage : bulkMessage
+    const currentFile = isExporting ? currentExportFile : bulkCurrentFile
+
     const [viewDialogOpen, setViewDialogOpen] = useState(false)
     const [viewDialogFile, setViewDialogFile] = useState<FileType | null>(null)
     const [viewDialogProjectId, setViewDialogProjectId] = useState<string>('')
@@ -346,9 +366,9 @@ export default function DashboardPage() {
     }
 
     const handleExport = async (type: 'files' | 'comments' | 'all') => {
-        setIsDownloading(true)
-        setDownloadProgress(0)
-        setDownloadMessage('Đang chuẩn bị export...')
+        setIsExporting(true)
+        setExportProgress(0)
+        setExportMessage('Đang chuẩn bị export...')
 
         try {
             const zip = new JSZip()
@@ -373,8 +393,8 @@ export default function DashboardPage() {
             const jsonData = JSON.stringify(exportData, null, 2)
             zip.file(`export-data-${timestamp}.json`, jsonData)
 
-            setDownloadProgress(20)
-            setDownloadMessage('Đang tải file metadata...')
+            setExportProgress(20)
+            setExportMessage('Đang tải file metadata...')
 
             // If exporting files, include actual file data
             if (type === 'files' || type === 'all') {
@@ -402,7 +422,7 @@ export default function DashboardPage() {
                     try {
                         // Handle image sequences
                         if (file.type === 'sequence' && currentVersion?.sequenceUrls && currentVersion.sequenceUrls.length > 0) {
-                            setDownloadMessage(`Đang tải sequence ${file.name}...`)
+                            setExportMessage(`Đang tải sequence ${file.name}...`)
 
                             // Create subfolder for sequence: files/projectName/sequenceName/
                             const sequenceFolderName = file.name.replace(/\.[^/.]+$/, '') || file.name
@@ -412,7 +432,7 @@ export default function DashboardPage() {
                                 // Download all frames
                                 for (let i = 0; i < currentVersion.sequenceUrls.length; i++) {
                                     try {
-                                        setDownloadMessage(`Đang tải frame ${i + 1}/${currentVersion.sequenceUrls.length} của ${file.name}`)
+                                        setExportMessage(`Đang tải frame ${i + 1}/${currentVersion.sequenceUrls.length} của ${file.name}`)
                                         const frameResponse = await fetch(currentVersion.sequenceUrls[i])
 
                                         if (frameResponse.ok) {
@@ -427,7 +447,7 @@ export default function DashboardPage() {
                                     }
 
                                     processedItems++
-                                    setDownloadProgress(20 + (processedItems / totalItems) * 60)
+                                    setExportProgress(20 + (processedItems / totalItems) * 60)
                                 }
 
                                 // Add sequence info file
@@ -442,7 +462,8 @@ export default function DashboardPage() {
                             }
                         } else {
                             // Handle single files
-                            setDownloadMessage(`Đang tải ${file.name}...`)
+                            setExportMessage(`Đang tải ${file.name}...`)
+                            setCurrentExportFile(file.name)
                             const response = await fetch(currentVersion.url)
 
                             if (response.ok) {
@@ -460,7 +481,7 @@ export default function DashboardPage() {
                             }
 
                             processedItems++
-                            setDownloadProgress(20 + (processedItems / totalItems) * 60)
+                            setExportProgress(20 + (processedItems / totalItems) * 60)
                         }
                     } catch (err) {
                         console.error(`Error fetching file ${file.name}:`, err)
@@ -468,17 +489,17 @@ export default function DashboardPage() {
                     }
                 }
             } else {
-                setDownloadProgress(80)
+                setExportProgress(80)
             }
 
             // Generate and download ZIP
-            setDownloadMessage('Đang nén dữ liệu...')
+            setExportMessage('Đang nén dữ liệu...')
             const zipBlob = await zip.generateAsync({
                 type: 'blob',
                 compression: 'DEFLATE',
                 compressionOptions: { level: 6 }
             }, (metadata) => {
-                setDownloadProgress(80 + (metadata.percent * 0.2))
+                setExportProgress(80 + (metadata.percent * 0.2))
             })
 
             // Download ZIP file
@@ -498,8 +519,8 @@ export default function DashboardPage() {
             toast.error('Lỗi khi export dữ liệu')
             throw error
         } finally {
-            setIsDownloading(false)
-            setDownloadProgress(0)
+            setIsExporting(false)
+            setExportProgress(0)
         }
     }
 
@@ -541,153 +562,10 @@ export default function DashboardPage() {
         }
     }
 
-    const handleBulkDownload = async (filesToDownload: FileWithProject[]) => {
-        if (filesToDownload.length === 0) return
-
-        setIsDownloading(true)
-        setDownloadProgress(0)
-        setDownloadMessage('Đang chuẩn bị...')
-
-        try {
-            const zip = new JSZip()
-
-            // Calculate total items for progress
-            let totalItems = 0
-            for (const file of filesToDownload) {
-                const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                if (file.type === 'sequence' && currentVersion?.sequenceUrls) {
-                    totalItems += currentVersion.sequenceUrls.length
-                } else {
-                    totalItems += 1
-                }
-            }
-
-            let processedItems = 0
-            let successCount = 0
-            let errorCount = 0
-
-            for (const file of filesToDownload) {
-                const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                if (!currentVersion?.url) {
-                    console.warn(`No URL found for file: ${file.name}`)
-                    errorCount++
-                    continue
-                }
-
-                setCurrentDownloadFile(file.name)
-
-                try {
-                    // For sequences, create a subfolder
-                    if (file.type === 'sequence' && currentVersion?.sequenceUrls && currentVersion.sequenceUrls.length > 0) {
-                        const folderName = file.name.replace(/\.[^/.]+$/, '') || file.name
-                        const folder = zip.folder(folderName)
-                        if (!folder) {
-                            errorCount++
-                            continue
-                        }
-
-                        // Add all sequence frames to the folder
-                        for (let i = 0; i < currentVersion.sequenceUrls.length; i++) {
-                            try {
-                                setDownloadMessage(`Đang tải frame ${i + 1}/${currentVersion.sequenceUrls.length} của ${file.name}`)
-                                const frameResponse = await fetch(currentVersion.sequenceUrls[i])
-                                if (frameResponse.ok) {
-                                    const frameBlob = await frameResponse.blob()
-                                    const ext = getFileExtension(currentVersion.sequenceUrls[i], frameBlob.type)
-                                    const frameName = `frame_${String(i + 1).padStart(4, '0')}${ext || '.jpg'}`
-                                    folder.file(frameName, frameBlob)
-                                }
-                            } catch (err) {
-                                console.error(`Error fetching frame ${i}:`, err)
-                            }
-                            processedItems++
-                            setDownloadProgress((processedItems / totalItems) * 80) // Reserve 20% for zipping
-                        }
-
-                        // Add comments for sequence
-                        const fileComments = comments.filter(c => c.fileId === file.id)
-                        if (fileComments.length > 0) {
-                            const commentsText = fileComments.map(c => {
-                                const date = c.createdAt?.toDate?.() || new Date()
-                                return `[${c.isResolved ? 'RESOLVED' : 'PENDING'}] ${c.userName} (${date.toLocaleString('vi-VN')}):\n${c.content}\n${c.annotationData ? `Frame: ${c.timestamp || 0}s` : ''}\n`
-                            }).join('\n---\n\n')
-                            folder.file('comments.txt', commentsText)
-                        }
-
-                        successCount++
-                    } else {
-                        // Single file download
-                        setDownloadMessage(`Đang tải ${file.name}...`)
-                        const response = await fetch(currentVersion.url)
-                        if (!response.ok) throw new Error(`Failed to fetch ${file.name}`)
-
-                        const blob = await response.blob()
-
-                        // Ensure file has correct extension
-                        const fileName = ensureFileExtension(file.name, currentVersion.url, blob.type, file.type)
-
-                        zip.file(fileName, blob)
-
-                        // Add comments for single file
-                        const fileComments = comments.filter(c => c.fileId === file.id)
-                        if (fileComments.length > 0) {
-                            const commentsText = fileComments.map(c => {
-                                const date = c.createdAt?.toDate?.() || new Date()
-                                return `[${c.isResolved ? 'RESOLVED' : 'PENDING'}] ${c.userName} (${date.toLocaleString('vi-VN')}):\n${c.content}\n${c.annotationData ? `Annotation at ${c.timestamp || 0}s` : ''}\n`
-                            }).join('\n---\n\n')
-
-                            const commentFileName = fileName.replace(/\.[^/.]+$/, '') + '_comments.txt'
-                            zip.file(commentFileName, commentsText)
-                        }
-
-                        processedItems++
-                        setDownloadProgress((processedItems / totalItems) * 80)
-                        successCount++
-                    }
-                } catch (error) {
-                    console.error(`Error downloading file ${file.name}:`, error)
-                    errorCount++
-                }
-            }
-
-            if (successCount === 0) {
-                toast.error('Không thể tải xuống files')
-                setIsDownloading(false)
-                return
-            }
-
-            // Generate ZIP file
-            setDownloadMessage('Đang nén files...')
-            setCurrentDownloadFile('')
-            const zipBlob = await zip.generateAsync({
-                type: 'blob',
-                compression: 'DEFLATE',
-                compressionOptions: { level: 6 }
-            }, (metadata) => {
-                setDownloadProgress(80 + (metadata.percent * 0.2))
-            })
-
-            // Download ZIP
-            const timestamp = new Date().toISOString().split('T')[0]
-            const filename = `files-download-${timestamp}.zip`
-
-            const link = document.createElement('a')
-            link.href = URL.createObjectURL(zipBlob)
-            link.download = filename
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(link.href)
-
-            toast.success(`Đã tải xuống ${successCount} files${errorCount > 0 ? ` (${errorCount} lỗi)` : ''}`)
-        } catch (error) {
-            console.error('Bulk download error:', error)
-            toast.error('Lỗi khi tải files')
-        } finally {
-            setIsDownloading(false)
-            setDownloadProgress(0)
-        }
-    }
+    // handleBulkDownload refactored to use hook via executeBulkDownload
+    // Keeping this wrapper to maintain interface compatibility if needed, 
+    // but the logic is now in the hook.
+    // The previous implementation block is removed.
 
     const totalProjects = projects.length
     const activeProjects = projects.filter(p => p.status === 'active').length
@@ -856,10 +734,10 @@ export default function DashboardPage() {
                 totalSize={statistics.storageStats.totalSize}
             />
             <DownloadProgressDialog
-                open={isDownloading}
-                progress={downloadProgress}
-                message={downloadMessage}
-                fileName={currentDownloadFile}
+                open={isBusy}
+                progress={progress}
+                message={message}
+                fileName={currentFile}
             />
 
             {/* File View Dialog for Comment Click */}

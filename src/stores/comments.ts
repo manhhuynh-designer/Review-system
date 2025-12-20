@@ -30,6 +30,7 @@ interface CommentState {
   editComment: (projectId: string, commentId: string, newContent: string) => Promise<void>
   deleteComment: (projectId: string, commentId: string) => Promise<void>
   updateDisplayName: (projectId: string, commentId: string, newDisplayName: string) => Promise<void>
+  toggleReaction: (projectId: string, commentId: string, reactionType: string, userId: string) => Promise<void>
   cleanup: () => void
 }
 
@@ -274,17 +275,51 @@ export const useCommentStore = create<CommentState>((set, get) => ({
 
   cleanup: () => {
     const { unsubscribe, unsubscribeMap } = get()
-    
+
     // Cleanup all subscriptions
     if (unsubscribeMap && unsubscribeMap.size > 0) {
       unsubscribeMap.forEach(unsub => unsub())
       unsubscribeMap.clear()
     }
-    
+
     if (unsubscribe) {
       unsubscribe()
     }
-    
+
     set({ unsubscribe: null, unsubscribeMap: new Map(), comments: [] })
   },
+
+  toggleReaction: async (projectId: string, commentId: string, reactionType: string, userId: string) => {
+    try {
+      const commentRef = doc(db, 'projects', projectId, 'comments', commentId)
+      const commentDoc = await getDoc(commentRef)
+
+      if (!commentDoc.exists()) return
+
+      const data = commentDoc.data()
+      const reactions = data.reactions || {}
+      const userList = reactions[reactionType] || []
+
+      let newReactions = { ...reactions }
+
+      if (userList.includes(userId)) {
+        // Remove reaction
+        newReactions[reactionType] = userList.filter((id: string) => id !== userId)
+        // Cleanup empty arrays
+        if (newReactions[reactionType].length === 0) {
+          delete newReactions[reactionType]
+        }
+      } else {
+        // Add reaction
+        newReactions[reactionType] = [...userList, userId]
+      }
+
+      await updateDoc(commentRef, {
+        reactions: newReactions
+      })
+    } catch (error: any) {
+      console.error('Failed to toggle reaction:', error)
+      toast.error('Lỗi thả cảm xúc: ' + error.message)
+    }
+  }
 }))

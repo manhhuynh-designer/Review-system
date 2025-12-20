@@ -35,6 +35,7 @@ export interface Project {
   // Trash fields
   trashedAt?: Timestamp // When project was moved to trash
   previousStatus?: 'active' | 'archived' // To restore to correct state
+  isCommentsLocked?: boolean
 }
 
 export interface FileVersion {
@@ -77,6 +78,7 @@ export interface File {
   // Trash fields
   isTrashed?: boolean
   trashedAt?: Timestamp
+  isCommentsLocked?: boolean
 }
 
 export interface Comment {
@@ -107,6 +109,7 @@ export interface Comment {
   isPending?: boolean // Optimistic UI state
   isEdited?: boolean
   updatedAt?: Timestamp
+  reactions?: Record<string, string[]> // reactionType -> array of userIds
 }
 
 export interface AnnotationObject {

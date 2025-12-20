@@ -47,6 +47,7 @@ interface FileState {
   reorderSequenceFrames: (projectId: string, fileId: string, version: number, newOrder: number[]) => Promise<void>
   deleteSequenceFrames: (projectId: string, fileId: string, version: number, indicesToDelete: number[]) => Promise<void>
   deleteVersion: (projectId: string, fileId: string, version: number) => Promise<void>
+  toggleFileLock: (projectId: string, fileId: string, isLocked: boolean) => Promise<void>
   cleanup: () => void
 }
 
@@ -839,6 +840,27 @@ export const useFileStore = create<FileState>((set, get) => ({
       console.error('Failed to delete version:', error)
       toast.error('Lỗi xóa phiên bản: ' + error.message)
       throw error
+    }
+  },
+
+  toggleFileLock: async (projectId: string, fileId: string, isLocked: boolean) => {
+    try {
+      const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+      await updateDoc(fileRef, {
+        isCommentsLocked: isLocked,
+        updatedAt: Timestamp.now()
+      })
+
+      set(state => ({
+        files: state.files.map(f =>
+          f.id === fileId ? { ...f, isCommentsLocked: isLocked } : f
+        )
+      }))
+
+      toast.success(isLocked ? 'Đã khóa bình luận file' : 'Đã mở khóa bình luận file')
+    } catch (error) {
+      console.error('Error toggling file lock:', error)
+      toast.error('Lỗi khi cập nhật trạng thái khóa bình luận')
     }
   },
 

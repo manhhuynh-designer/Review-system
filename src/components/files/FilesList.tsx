@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useFileStore } from '@/stores/files'
 import { useCommentStore } from '@/stores/comments'
+import { useProjectStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
 import { FileCardShared } from '@/components/shared/FileCardShared'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
@@ -11,8 +12,10 @@ import { Badge } from '@/components/ui/badge'
 import { ref, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 import { formatFileSize } from '@/lib/utils'
-import { Trash2, X, CheckSquare, Square, Grid3x3, List, MessageSquare, Calendar, FileImage, Video, Box, FileText } from 'lucide-react'
+import { Trash2, X, CheckSquare, Square, Grid3x3, List, MessageSquare, Calendar, FileImage, Video, Box, FileText, Download } from 'lucide-react'
 import type { File as FileType } from '@/types'
+import { useBulkDownload } from '@/hooks/useBulkDownload'
+import { DownloadProgressDialog } from '@/components/dashboard/DownloadProgressDialog'
 
 type SortOption = 'name' | 'date' | 'type' | 'size'
 type SortDirection = 'asc' | 'desc'
@@ -35,9 +38,10 @@ const getFileTypeLabel = (type: string) => {
 }
 
 export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', searchTerm = '' }: FilesListProps) {
-  const { files, switchVersion, uploading, deleteFile, deleting, uploadFile, setSequenceViewMode, updateFrameCaption, renameFile, selectedFile: storeSelectedFile, selectFile: storeSelectFile } = useFileStore()
+  const { files, switchVersion, uploading, deleteFile, deleting, uploadFile, setSequenceViewMode, updateFrameCaption, renameFile, toggleFileLock, selectedFile: storeSelectedFile, selectFile: storeSelectFile } = useFileStore()
   const { comments, subscribeToComments, addComment, toggleResolve, editComment, deleteComment, cleanup: cleanupComments } = useCommentStore()
   const { user } = useAuthStore()
+  const project = useProjectStore(s => s.project)
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({})
   const [selectedFile, setSelectedFile] = useState<FileType | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -53,6 +57,14 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set())
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  const {
+    handleBulkDownload,
+    isDownloading,
+    downloadProgress,
+    downloadMessage,
+    currentDownloadFile
+  } = useBulkDownload()
 
   // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -320,7 +332,7 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
       for (const fileId of selectedFileIds) {
         await deleteFile(projectId, fileId)
       }
-      
+
       // Clear selection and close dialog
       setSelectedFileIds(new Set())
       setBulkDeleteDialogOpen(false)
@@ -376,8 +388,30 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-1">
+            {/* Download Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const filesToDownload = isSelectionMode && selectedFileIds.size > 0
+                  ? files.filter(f => selectedFileIds.has(f.id))
+                  : filteredAndSortedFiles
+
+                // Add project name to files for zip structure
+                const filesWithProject = filesToDownload.map(f => ({ ...f, projectName: 'Project Files' }))
+                handleBulkDownload(filesWithProject, comments)
+              }}
+              className="h-7 px-2 text-xs mr-2"
+              title={isSelectionMode && selectedFileIds.size > 0 ? 'Tải xuống đã chọn' : 'Tải xuống tất cả'}
+            >
+              <Download className="w-3.5 h-3.5 sm:mr-1" />
+              <span className="hidden sm:inline">
+                {isSelectionMode && selectedFileIds.size > 0 ? 'Tải đã chọn' : 'Tải tất cả'}
+              </span>
+            </Button>
+
             {/* View mode toggle */}
             <div className="flex items-center border rounded-md mr-2">
               <Button
@@ -481,7 +515,7 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
                     />
                   </div>
                 )}
-                
+
                 {/* Selection highlight */}
                 <div className={`rounded-lg transition-all ${isSelectionMode && isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
                   <FileCardShared
@@ -496,6 +530,8 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
                       }
                     }}
                     onDelete={user && !isSelectionMode ? () => handleDeleteClick(file) : undefined}
+                    onToggleLock={user && !isSelectionMode ? () => toggleFileLock(projectId, file.id, !file.isCommentsLocked) : undefined}
+                    isLocked={file.isCommentsLocked}
                     isAdmin={!!user}
                   />
                 </div>
@@ -539,8 +575,8 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
-                    <Badge 
-                      variant="secondary" 
+                    <Badge
+                      variant="secondary"
                       className="absolute bottom-1 right-1 text-[10px] px-1 py-0 h-4 backdrop-blur-sm bg-black/60 text-white border-0"
                     >
                       {current?.frameCount || 0}f
@@ -616,9 +652,8 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
             return (
               <div
                 key={file.id}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer hover:bg-muted/50 ${
-                  isSelectionMode && isSelected ? 'ring-2 ring-primary ring-offset-1 bg-primary/5' : ''
-                }`}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer hover:bg-muted/50 ${isSelectionMode && isSelected ? 'ring-2 ring-primary ring-offset-1 bg-primary/5' : ''
+                  }`}
                 onClick={() => {
                   if (isSelectionMode) {
                     toggleFileSelection(file.id)
@@ -723,6 +758,8 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
           onEditComment={user ? handleEditComment : undefined}
           onDeleteComment={user ? handleDeleteComment : undefined}
           onRenameFile={user ? async (fileId, newName) => await renameFile(projectId, fileId, newName) : undefined}
+          project={project || undefined}
+          isArchived={project?.status === 'archived'}
         />
       )}
 
@@ -744,6 +781,12 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
         onConfirm={handleBulkDelete}
         fileName={`${selectedFileIds.size} file đã chọn`}
         loading={bulkDeleting}
+      />
+      <DownloadProgressDialog
+        open={isDownloading}
+        progress={downloadProgress}
+        message={downloadMessage}
+        fileName={currentDownloadFile}
       />
     </>
   )

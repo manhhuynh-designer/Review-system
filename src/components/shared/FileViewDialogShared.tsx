@@ -93,6 +93,9 @@ interface Props {
     frameCaptions?: Record<number, string>
     onNavigateFrame?: (frameIndex: number) => void
   }
+  // Comment blocking props
+  project?: { isCommentsLocked?: boolean }
+  isArchived?: boolean
 }
 
 const getFileTypeIcon = (type: string) => {
@@ -132,7 +135,9 @@ export function FileViewDialogShared({
   isAdmin = false,
   onCaptionChange,
   sequenceContext,
-  onRenameFile
+  onRenameFile,
+  project,
+  isArchived = false
 }: Props) {
   const [showComments, setShowComments] = useState(true)
   const [showOnlyCurrentTimeComments, setShowOnlyCurrentTimeComments] = useState(false)
@@ -1715,6 +1720,7 @@ export function FileViewDialogShared({
                       isAdmin={isAdmin}
                       onEdit={onEditComment}
                       onDelete={onDeleteComment}
+                      isLocked={file.isCommentsLocked || project?.isCommentsLocked || isArchived}
                     />
                     {fileComments.length === 0 && (
                       <div className="text-center text-muted-foreground py-8">
@@ -1726,55 +1732,81 @@ export function FileViewDialogShared({
 
                   {/* Desktop: Always show comment input */}
                   <div className="hidden sm:block p-4 border-t bg-background flex-shrink-0">
-                    <AddComment
-                      onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
-                        const hasData = annotationData && annotationData.length > 0
-                        const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                          konva: annotationData,
-                          camera: glbViewerRef.current?.getCameraState()
-                        }) : null
+                    {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
+                      <div className="text-center text-muted-foreground py-4 px-2 bg-muted/30 rounded-md">
+                        <div className="flex items-center justify-center gap-2 text-sm">
+                          <span>🔒</span>
+                          <span>
+                            {isArchived
+                              ? 'Dự án đã được lưu trữ. Không thể bình luận.'
+                              : 'Tính năng bình luận đang tạm khóa.'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <AddComment
+                        onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                          const hasData = annotationData && annotationData.length > 0
+                          const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                            konva: annotationData,
+                            camera: glbViewerRef.current?.getCameraState()
+                          }) : null
 
-                        await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+                          await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
 
-                        if (dataToSave) {
-                          setAnnotationData(null)
-                          setIsAnnotating(false)
-                        }
-                      }}
-                      userName={currentUserName}
-                      onUserNameChange={onUserNameChange}
-                      currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                      showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                      annotationData={!isReadOnly ? annotationData : null}
-                      onAnnotationClick={handleStartAnnotating}
-                    />
+                          if (dataToSave) {
+                            setAnnotationData(null)
+                            setIsAnnotating(false)
+                          }
+                        }}
+                        userName={currentUserName}
+                        onUserNameChange={onUserNameChange}
+                        currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                        showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                        annotationData={!isReadOnly ? annotationData : null}
+                        onAnnotationClick={handleStartAnnotating}
+                      />
+                    )}
                   </div>
 
                   {/* Mobile: Comment Input (Always visible now, no toggle) */}
                   <div id="mobile-add-comment" className="sm:hidden border-t bg-background flex-shrink-0 p-2">
-                    <AddComment
-                      isMobile={true}
-                      onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
-                        const hasData = annotationData && annotationData.length > 0
-                        const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                          konva: annotationData,
-                          camera: glbViewerRef.current?.getCameraState()
-                        }) : null
+                    {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
+                      <div className="text-center text-muted-foreground py-3 px-2 bg-muted/30 rounded-md">
+                        <div className="flex items-center justify-center gap-2 text-xs">
+                          <span>🔒</span>
+                          <span>
+                            {isArchived
+                              ? 'Dự án đã lưu trữ. Không thể bình luận.'
+                              : 'Bình luận đang tạm khóa.'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <AddComment
+                        isMobile={true}
+                        onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                          const hasData = annotationData && annotationData.length > 0
+                          const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                            konva: annotationData,
+                            camera: glbViewerRef.current?.getCameraState()
+                          }) : null
 
-                        await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+                          await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
 
-                        if (dataToSave) {
-                          setAnnotationData(null)
-                          setIsAnnotating(false)
-                        }
-                      }}
-                      userName={currentUserName}
-                      onUserNameChange={onUserNameChange}
-                      currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                      showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                      annotationData={!isReadOnly ? annotationData : null}
-                      onAnnotationClick={handleStartAnnotating}
-                    />
+                          if (dataToSave) {
+                            setAnnotationData(null)
+                            setIsAnnotating(false)
+                          }
+                        }}
+                        userName={currentUserName}
+                        onUserNameChange={onUserNameChange}
+                        currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                        showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                        annotationData={!isReadOnly ? annotationData : null}
+                        onAnnotationClick={handleStartAnnotating}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -1799,6 +1831,7 @@ export function FileViewDialogShared({
                     isAdmin={isAdmin}
                     onEdit={onEditComment}
                     onDelete={onDeleteComment}
+                    isLocked={file.isCommentsLocked || project?.isCommentsLocked || isArchived}
                   />
                   {fileComments.length === 0 && (
                     <div className="text-center text-muted-foreground py-8">
@@ -1808,28 +1841,41 @@ export function FileViewDialogShared({
                   )}
                 </div>
                 <div className="p-4 border-t bg-background">
-                  <AddComment
-                    onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData) => {
-                      const hasData = annotationData && annotationData.length > 0
-                      const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                        konva: annotationData,
-                        camera: glbViewerRef.current?.getCameraState()
-                      }) : null
+                  {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
+                    <div className="text-center text-muted-foreground py-4 px-2 bg-muted/30 rounded-md">
+                      <div className="flex items-center justify-center gap-2 text-sm">
+                        <span>🔒</span>
+                        <span>
+                          {isArchived
+                            ? 'Dự án đã lưu trữ. Không thể bình luận.'
+                            : 'Tính năng bình luận đang tạm khóa.'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <AddComment
+                      onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData) => {
+                        const hasData = annotationData && annotationData.length > 0
+                        const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                          konva: annotationData,
+                          camera: glbViewerRef.current?.getCameraState()
+                        }) : null
 
-                      await onAddComment(userName, content, timestamp, parentCommentId, dataToSave)
+                        await onAddComment(userName, content, timestamp, parentCommentId, dataToSave)
 
-                      if (dataToSave) {
-                        setAnnotationData(null)
-                        setIsAnnotating(false)
-                      }
-                    }}
-                    userName={currentUserName}
-                    onUserNameChange={onUserNameChange}
-                    currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                    showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                    annotationData={!isReadOnly ? annotationData : null}
-                    onAnnotationClick={handleStartAnnotating}
-                  />
+                        if (dataToSave) {
+                          setAnnotationData(null)
+                          setIsAnnotating(false)
+                        }
+                      }}
+                      userName={currentUserName}
+                      onUserNameChange={onUserNameChange}
+                      currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                      showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                      annotationData={!isReadOnly ? annotationData : null}
+                      onAnnotationClick={handleStartAnnotating}
+                    />
+                  )}
                 </div>
               </div>
             )}

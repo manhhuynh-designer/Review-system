@@ -34,6 +34,7 @@ interface ProjectState {
   trashProject: (id: string) => Promise<void> // Alias for deleteProject
   restoreProject: (id: string) => Promise<void> // Restore from trash
   permanentDeleteProject: (id: string) => Promise<void> // Hard delete
+  toggleProjectLock: (id: string, isLocked: boolean) => Promise<void>
   selectProject: (project: Project | null) => void
   cleanup: () => void
 }
@@ -234,6 +235,27 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       throw error
     } finally {
       set({ loading: false })
+    }
+  },
+
+  toggleProjectLock: async (projectId: string, isLocked: boolean) => {
+    try {
+      const projectRef = doc(db, 'projects', projectId)
+      await updateDoc(projectRef, {
+        isCommentsLocked: isLocked,
+        updatedAt: Timestamp.now()
+      })
+
+      set(state => ({
+        projects: state.projects.map(p =>
+          p.id === projectId ? { ...p, isCommentsLocked: isLocked } : p
+        )
+      }))
+
+      toast.success(isLocked ? 'Đã khóa bình luận dự án' : 'Đã mở khóa bình luận dự án')
+    } catch (error) {
+      console.error('Error toggling project lock:', error)
+      toast.error('Lỗi khi cập nhật trạng thái khóa bình luận')
     }
   },
 

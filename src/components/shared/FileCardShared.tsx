@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { formatFileSize } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileImage, Video, Box, MessageSquare, Clock, Trash2, Film, FileText } from 'lucide-react'
+import { FileImage, Video, Box, MessageSquare, Clock, Trash2, Film, FileText, Lock, Unlock } from 'lucide-react'
 
 interface Props {
   file: FileType
@@ -12,6 +12,8 @@ interface Props {
   commentCount: number
   onClick: () => void
   onDelete?: () => void
+  onToggleLock?: () => void
+  isLocked?: boolean
   compact?: boolean
   isAdmin?: boolean
 }
@@ -34,7 +36,7 @@ const getFileTypeLabel = (type: string) => {
   return 'Tệp tin'
 }
 
-export function FileCardShared({ file, resolvedUrl, commentCount, onClick, onDelete, compact = false, isAdmin = false }: Props) {
+export function FileCardShared({ file, resolvedUrl, commentCount, onClick, onDelete, onToggleLock, isLocked, compact = false, isAdmin = false }: Props) {
   const current = file.versions.find(v => v.version === file.currentVersion) || file.versions[0]
   const effectiveUrl = resolvedUrl || current?.url
   const uploadDate = current?.uploadedAt?.toDate ? current.uploadedAt.toDate() : new Date()
@@ -127,16 +129,22 @@ export function FileCardShared({ file, resolvedUrl, commentCount, onClick, onDel
         </div>
 
         {/* Type badge */}
-        <div className="absolute top-2 left-2">
+        <div className="absolute top-2 left-2 flex gap-1">
           <Badge variant="secondary" className="text-xs backdrop-blur-sm bg-background/80">
             {getFileTypeLabel(file.type)}
           </Badge>
+          {isLocked && (
+            <Badge variant="outline" className="text-xs backdrop-blur-sm bg-amber-500/90 border-amber-500 text-white gap-1">
+              <Lock className="w-2.5 h-2.5" />
+              Khóa BL
+            </Badge>
+          )}
         </div>
 
         {/* Version badge - positioned at bottom-left to avoid selection checkbox */}
         <div className="absolute bottom-2 left-2">
-          <Badge 
-            variant="outline" 
+          <Badge
+            variant="outline"
             className="text-xs backdrop-blur-sm bg-background/90 border-primary/30"
             title={`Phiên bản ${current?.version}${current?.versionLabel ? ` (${current.versionLabel})` : ''} - ${format(uploadDate, 'dd/MM/yy HH:mm')}`}
           >
@@ -170,6 +178,26 @@ export function FileCardShared({ file, resolvedUrl, commentCount, onClick, onDel
               }}
             >
               <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          {isAdmin && onToggleLock && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title={isLocked ? "Mở khóa bình luận" : "Khóa bình luận"}
+              className={`h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity ${isLocked ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 opacity-100' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50'}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleLock()
+              }}
+            >
+              <div className="relative">
+                {isLocked ? (
+                  <Lock className="h-3 w-3" />
+                ) : (
+                  <Unlock className="h-3 w-3" />
+                )}
+              </div>
             </Button>
           )}
         </div>

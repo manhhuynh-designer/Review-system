@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { FileCardShared } from '@/components/shared/FileCardShared'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import { HelpCircle } from 'lucide-react'
+import { HelpCircle, Download } from 'lucide-react'
 import { resetTourStatus } from '@/lib/fileTours'
 import {
   Dialog,
@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dialog"
 import { getSecureDownloadUrl } from '@/lib/secureStorage'
 import type { File as FileType } from '@/types'
+import { useBulkDownload } from '@/hooks/useBulkDownload'
+import { DownloadProgressDialog } from '@/components/dashboard/DownloadProgressDialog'
 
 export default function ReviewPage() {
   const { projectId, fileId } = useParams<{ projectId: string; fileId?: string }>()
@@ -34,6 +36,15 @@ export default function ReviewPage() {
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({})
   const [selectedFile, setSelectedFile] = useState<FileType | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  // Bulk download hook
+  const {
+    handleBulkDownload,
+    isDownloading,
+    downloadProgress,
+    downloadMessage,
+    currentDownloadFile
+  } = useBulkDownload()
 
   const getKey = (fileId: string, version: number) => `${fileId}-v${version}`
 
@@ -255,6 +266,13 @@ export default function ReviewPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <DownloadProgressDialog
+        open={isDownloading}
+        progress={downloadProgress}
+        message={downloadMessage}
+        fileName={currentDownloadFile}
+      />
+
       {/* UserName Prompt Dialog */}
       <Dialog open={showNamePrompt} onOpenChange={setShowNamePrompt}>
         <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
@@ -295,6 +313,20 @@ export default function ReviewPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const filesWithProject = projectFiles.map(f => ({ ...f, projectName: project.name }))
+                  handleBulkDownload(filesWithProject, comments)
+                }}
+                className="gap-2"
+                title="Tải xuống tất cả"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Tải tất cả</span>
+              </Button>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -340,6 +372,7 @@ export default function ReviewPage() {
                     resolvedUrl={effectiveUrl}
                     commentCount={commentCount}
                     onClick={() => handleFileClick(file)}
+                    isLocked={file.isCommentsLocked}
                   />
                 )
               })}
@@ -361,6 +394,8 @@ export default function ReviewPage() {
                 onEditComment={handleEditComment}
                 onDeleteComment={handleDeleteComment}
                 isAdmin={false}
+                project={project}
+                isArchived={project.status === 'archived'}
               />
             )}
           </>

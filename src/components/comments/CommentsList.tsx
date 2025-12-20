@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ReactionPicker, REACTION_TYPES } from './ReactionPicker'
 
 interface CommentsListProps {
   comments: Comment[]
@@ -27,6 +28,7 @@ interface CommentsListProps {
   isAdmin?: boolean
   onEdit?: (commentId: string, newContent: string) => Promise<void>
   onDelete?: (commentId: string) => Promise<void>
+  isLocked?: boolean
 }
 
 export function CommentsList({
@@ -40,6 +42,7 @@ export function CommentsList({
   isAdmin = false,
   onEdit,
   onDelete,
+  isLocked = false,
 }: CommentsListProps) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
@@ -258,12 +261,20 @@ export function CommentsList({
                   )}
                 </Button>
               )}
+              {/* Reaction Picker */}
+              {/* Reaction Picker */}
+              <ReactionPicker
+                onSelect={(reaction) => {
+                  useCommentStore.getState().toggleReaction(comment.projectId, comment.id, reaction, currentUserName || 'Anonymous')
+                }}
+              />
+
               {/* Pin button */}
               <Button
                 variant={comment.isPinned ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={(e) => { e.stopPropagation(); handlePin(comment) }}
-                className="h-7 px-2"
+                className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
                 title={comment.isPinned ? 'Unpin' : 'Pin'}
               >
                 <Pin className="w-3.5 h-3.5" />
@@ -283,7 +294,7 @@ export function CommentsList({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {onEdit && (
+                    {onEdit && !isLocked && (
                       <DropdownMenuItem onClick={(e) => {
                         e.stopPropagation()
                         handleEditClick(comment)
@@ -292,7 +303,7 @@ export function CommentsList({
                         Chỉnh sửa
                       </DropdownMenuItem>
                     )}
-                    {onDelete && (
+                    {onDelete && !isLocked && (
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation()
@@ -413,6 +424,29 @@ export function CommentsList({
               </div>
             )
           })()}
+
+          {/* Reactions Display */}
+          {comment.reactions && Object.keys(comment.reactions).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(comment.reactions).map(([reaction, users]) => (
+                <button
+                  key={reaction}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    useCommentStore.getState().toggleReaction(comment.projectId, comment.id, reaction, currentUserName || 'Anonymous')
+                  }}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${users.includes(currentUserName || 'Anonymous')
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'bg-muted/50 border-transparent hover:bg-muted text-muted-foreground'
+                    }`}
+                  title={`${users.join(', ')}`}
+                >
+                  <span>{REACTION_TYPES[reaction as keyof typeof REACTION_TYPES] || reaction}</span>
+                  <span className="font-medium text-[10px]">{users.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Other Attachments */}
           {comment.attachments && comment.attachments.filter(att => att.type !== 'image').length > 0 && (

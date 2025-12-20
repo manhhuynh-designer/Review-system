@@ -11,7 +11,7 @@ import type { Project } from '@/types'
 import { ProjectEditDialog } from './ProjectEditDialog'
 import { ProjectDeleteDialog } from './ProjectDeleteDialog'
 import { formatFileSize } from '@/lib/utils'
-import { Calendar, User, Mail, AlertCircle, MoreVertical, Archive, ArchiveRestore, Image as ImageIcon, HardDrive, Play } from 'lucide-react'
+import { Calendar, User, Mail, AlertCircle, MoreVertical, Archive, ArchiveRestore, Image as ImageIcon, HardDrive, Play, Lock, Unlock } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,7 +111,26 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
                     <ArchiveRestore className="h-4 w-4 mr-2" />
                     Khôi phục
                   </DropdownMenuItem>
+
                 )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation()
+                  const updateLock = useProjectStore.getState().toggleProjectLock
+                  updateLock(project.id, !project.isCommentsLocked)
+                }}>
+                  {project.isCommentsLocked ? (
+                    <>
+                      <Unlock className="h-4 w-4 mr-2" />
+                      Mở khóa bình luận
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4 mr-2" />
+                      Khóa bình luận
+                    </>
+                  )}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <ProjectDeleteDialog project={project} />
               </DropdownMenuContent>
@@ -184,7 +203,7 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
             )}
           </div>
         </div>
-      </div>
+      </div >
     )
   }
 
@@ -241,6 +260,12 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
                 {formatFileSize(totalSize)}
               </span>
             )}
+            {project.isCommentsLocked && (
+              <span className="flex items-center gap-1 text-amber-500">
+                <Lock className="h-3 w-3" />
+                Đã khóa bình luận
+              </span>
+            )}
           </div>
 
           {project.tags && project.tags.length > 0 && (
@@ -279,6 +304,24 @@ export function ProjectCard({ project, viewMode = 'list' }: { project: Project; 
                   Khôi phục
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation()
+                const updateLock = useProjectStore.getState().toggleProjectLock
+                updateLock(project.id, !project.isCommentsLocked)
+              }}>
+                {project.isCommentsLocked ? (
+                  <>
+                    <Unlock className="h-4 w-4 mr-2" />
+                    Mở khóa bình luận
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4 mr-2" />
+                    Khóa bình luận
+                  </>
+                )}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <ProjectDeleteDialog project={project} />
             </DropdownMenuContent>
