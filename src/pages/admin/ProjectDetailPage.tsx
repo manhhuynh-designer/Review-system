@@ -32,7 +32,7 @@ export default function ProjectDetailPage() {
   const handleCopyReviewLink = async () => {
     if (!projectId) return
 
-    const reviewUrl = `${window.location.origin}/review/${projectId}`
+    const reviewUrl = `${window.location.origin}/share/p/${projectId}`
 
     try {
       await navigator.clipboard.writeText(reviewUrl)

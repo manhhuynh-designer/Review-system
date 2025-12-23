@@ -81,7 +81,7 @@ export function FileViewDialog({ file, projectId, resolvedUrl, open, onOpenChang
   // Generate shareable link for this file
   const getShareLink = () => {
     const baseUrl = window.location.origin
-    return `${baseUrl}/review/${projectId}/file/${file?.id}`
+    return `${baseUrl}/share/p/${projectId}/file/${file?.id}`
   }
 
   const copyShareLink = async () => {
