@@ -88,41 +88,47 @@ export default async function handler(req, res) {
             appUrl = `${appUrl}/review/${projectId}`;
         }
 
-        // Check User Agent
-        // Check User Agent with broader regex
-        const userAgent = (req.headers['user-agent'] || '').toLowerCase();
-        const isBot = /bot|googlebot|crawler|spider|robot|crawling|facebook|twitter|linkedin|slack|discord|whatsapp|telegram|skype|embedly/i.test(userAgent);
+        // Hybrid Metadata Page Strategy:
+        // Always return HTML with OG tags for bots to scrape.
+        // Include a client-side JavaScript redirect for humans to reach the app.
+        // This avoids flaky user-agent detection and ensures metadata always loads.
 
-        if (isBot) {
-            const html = `
+        const html = `
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <title>${title}</title>
     
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="${appUrl}">
     <meta property="og:title" content="${title}">
     <meta property="og:description" content="Chia sẻ từ Review System">
     ${image ? `<meta property="og:image" content="${image}">` : ''}
 
+    <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="${appUrl}">
     <meta property="twitter:title" content="${title}">
     <meta property="twitter:description" content="Chia sẻ từ Review System">
     ${image ? `<meta property="twitter:image" content="${image}">` : ''}
+
+    <!-- Redirect for Humans -->
+    <meta http-equiv="refresh" content="0;url=${appUrl}">
+    <script type="text/javascript">
+        window.location.href = "${appUrl}";
+    </script>
 </head>
 <body>
-    <h1>Đang chuyển hướng...</h1>
+    <p>Đang chuyển hướng đến <a href="${appUrl}">Review System</a>...</p>
 </body>
 </html>
         `;
-            res.status(200).send(html);
-        } else {
-            // Human -> Redirect
-            res.redirect(appUrl);
-        }
+
+        // Cache for 1 hour public, but revalidate
+        res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+        res.status(200).send(html);
 
     } catch (error) {
         console.error('Error fetching metadata:', error);
