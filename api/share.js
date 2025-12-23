@@ -139,7 +139,9 @@ export default async function handler(req, res) {
 </html>
     `;
 
-    // Cache for 10 seconds to allow quick debugging updates
-    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate');
+    // Disable caching completely to ensure bots get fresh data
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.status(200).send(html);
 }
