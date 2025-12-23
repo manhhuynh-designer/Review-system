@@ -65,8 +65,10 @@ export default async function handler(req, res) {
                 const versionData = data.versions?.find(v => v.version === currentVersion);
 
                 if (versionData) {
-                    // Priority: thumbnailUrl (for model/pdf) > sequenceUrls[0] (for sequence) > url (for image/video)
-                    if (versionData.thumbnailUrl) {
+                    // Priority: shareThumbnailUrl (compressed for social) > thumbnailUrl (for model/pdf) > sequenceUrls[0] > url
+                    if (versionData.shareThumbnailUrl) {
+                        image = versionData.shareThumbnailUrl;
+                    } else if (versionData.thumbnailUrl) {
                         image = versionData.thumbnailUrl;
                     } else if (versionData.sequenceUrls && versionData.sequenceUrls.length > 0) {
                         image = versionData.sequenceUrls[0]; // First frame for sequences
@@ -92,8 +94,10 @@ export default async function handler(req, res) {
                     const currentVersion = firstFile.currentVersion || 1;
                     const versionData = firstFile.versions?.find(v => v.version === currentVersion);
                     if (versionData) {
-                        // Priority: thumbnailUrl > sequenceUrls[0] > url
-                        if (versionData.thumbnailUrl) {
+                        // Priority: shareThumbnailUrl > thumbnailUrl > sequenceUrls[0] > url
+                        if (versionData.shareThumbnailUrl) {
+                            image = versionData.shareThumbnailUrl;
+                        } else if (versionData.thumbnailUrl) {
                             image = versionData.thumbnailUrl;
                         } else if (versionData.sequenceUrls && versionData.sequenceUrls.length > 0) {
                             image = versionData.sequenceUrls[0];

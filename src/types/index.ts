@@ -46,6 +46,7 @@ export interface FileVersion {
   frameCount?: number // Number of frames in sequence
   frameCaptions?: Record<number, string> // Captions for each frame (frame index -> caption text)
   thumbnailUrl?: string // Custom thumbnail for 3D models
+  shareThumbnailUrl?: string // Compressed thumbnail for social sharing (1200x630 JPEG, <1MB)
   cameraState?: { // Camera position for 3D models
     position: [number, number, number]
     target: [number, number, number]

@@ -180,11 +180,58 @@ export const useFileStore = create<FileState>((set, get) => ({
         validationStatus: 'pending'
       }
 
-      // Generate thumbnail for PDF
+      // Generate share thumbnail for social sharing (1200x630 JPEG)
+      // This runs after file upload completes to avoid blocking the main upload
+      const generateShareThumbnail = async (): Promise<void> => {
+        try {
+          console.log('🖼️ Generating share thumbnail for', fileType)
+          const shareThumbnailPath = `projects/${projectId}/${fileId}/v${currentVersion}/share_thumbnail.jpg`
+          const shareThumbnailRef = ref(storage, shareThumbnailPath)
+
+          let thumbnailBlob: Blob | null = null
+
+          if (fileType === 'image') {
+            // For images, resize/compress the uploaded image
+            const { generateImageThumbnail } = await import('../lib/shareThumbnail')
+            thumbnailBlob = await generateImageThumbnail(url)
+          } else if (fileType === 'video') {
+            // For videos, extract first frame
+            const { generateVideoThumbnail } = await import('../lib/shareThumbnail')
+            thumbnailBlob = await generateVideoThumbnail(url)
+          } else if (fileType === 'pdf') {
+            // For PDFs, render first page
+            const { generatePdfThumbnail } = await import('../lib/shareThumbnail')
+            thumbnailBlob = await generatePdfThumbnail(url)
+          }
+          // Note: For 3D models and sequences, we use existing thumbnailUrl or sequenceUrls[0]
+
+          if (thumbnailBlob) {
+            await uploadBytes(shareThumbnailRef, thumbnailBlob)
+            const shareThumbnailUrl = await getDownloadURL(shareThumbnailRef)
+
+            // Update Firestore with share thumbnail URL
+            const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+            const currentFile = get().files.find(f => f.id === fileId)
+            if (currentFile) {
+              const updatedVersions = currentFile.versions.map(v =>
+                v.version === currentVersion
+                  ? { ...v, shareThumbnailUrl }
+                  : v
+              )
+              await updateDoc(fileRef, { versions: updatedVersions })
+            }
+            console.log('✅ Share thumbnail generated:', shareThumbnailUrl)
+          }
+        } catch (err) {
+          console.warn('⚠️ Failed to generate share thumbnail:', err)
+          // Continue without share thumbnail - not critical
+        }
+      }
+
+      // Generate PDF page thumbnail (for display, separate from share thumbnail)
       if (fileType === 'pdf') {
         try {
-          console.log('🖼️ Generating PDF thumbnail...')
-          // Dynamic import to avoid loading pdfjs if not needed
+          console.log('🖼️ Generating PDF display thumbnail...')
           const pdfjs = await import('pdfjs-dist')
           pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
@@ -210,11 +257,10 @@ export const useFileStore = create<FileState>((set, get) => ({
             const thumbUrl = await getDownloadURL(thumbRef)
 
             newVersion.thumbnailUrl = thumbUrl
-            console.log('✅ PDF thumbnail generated and uploaded:', thumbUrl)
+            console.log('✅ PDF display thumbnail generated:', thumbUrl)
           }
         } catch (err) {
-          console.error('⚠️ Failed to generate PDF thumbnail:', err)
-          // Continue without thumbnail
+          console.error('⚠️ Failed to generate PDF display thumbnail:', err)
         }
       }
       console.log('📝 Version metadata created:', newVersion)
@@ -260,6 +306,9 @@ export const useFileStore = create<FileState>((set, get) => ({
       }
 
       console.log('🎉 Upload process completed successfully!')
+
+      // Generate share thumbnail in background (non-blocking)
+      generateShareThumbnail().catch(err => console.warn('Share thumbnail generation failed:', err))
     } catch (error: any) {
       console.error('❌ Upload failed:', error)
       console.error('Error details:', {
@@ -517,6 +566,17 @@ export const useFileStore = create<FileState>((set, get) => ({
             await deleteObject(storageRef)
             console.log(`🗑️ Deleted storage file: ${storagePath}`)
           }
+
+          // Delete thumbnails if they exist
+          try {
+            const thumbPath = `projects/${projectId}/${fileId}/v${version.version}/thumbnail.jpg`
+            await deleteObject(ref(storage, thumbPath))
+          } catch (e) { /* ignore */ }
+
+          try {
+            const shareThumbnailPath = `projects/${projectId}/${fileId}/v${version.version}/share_thumbnail.jpg`
+            await deleteObject(ref(storage, shareThumbnailPath))
+          } catch (e) { /* ignore */ }
         } catch (storageError: any) {
           console.warn(`⚠️ Failed to delete storage file: ${storageError.message}`)
         }
@@ -813,6 +873,15 @@ export const useFileStore = create<FileState>((set, get) => ({
           } catch (e) {
             // Ignore thumbnail deletion errors
           }
+        }
+
+        // Delete share thumbnail if exists
+        try {
+          const shareThumbnailPath = `projects/${projectId}/${fileId}/v${version}/share_thumbnail.jpg`
+          const shareThumbnailRef = ref(storage, shareThumbnailPath)
+          await deleteObject(shareThumbnailRef)
+        } catch (e) {
+          // Ignore share thumbnail deletion errors (may not exist)
         }
       } catch (storageError: any) {
         console.warn(`⚠️ Failed to delete storage files: ${storageError.message}`)
