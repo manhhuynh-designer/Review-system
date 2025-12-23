@@ -37,8 +37,8 @@ export default async function handler(req, res) {
     if (pathParts.length > 0) projectId = pathParts[0];
     if (pathParts.length >= 3 && pathParts[1] === 'file') fileId = pathParts[2];
 
-    // Default Metadata - include debug markers
-    let title = `[INIT] slug=${slug || 'none'}`;
+    // Default Metadata
+    let title = 'Review System';
     let description = 'Chia sẻ từ Review System';
     let image = null;
     let debugError = null; // For debugging output
@@ -77,6 +77,17 @@ export default async function handler(req, res) {
             if (projectDoc.exists) {
                 const data = projectDoc.data();
                 title = data.name || 'Dự án';
+
+                // Try to get thumbnail from the first file in the project
+                const filesSnapshot = await db.collection('projects').doc(projectId).collection('files').limit(1).get();
+                if (!filesSnapshot.empty) {
+                    const firstFile = filesSnapshot.docs[0].data();
+                    const currentVersion = firstFile.currentVersion || 1;
+                    const versionData = firstFile.versions?.find(v => v.version === currentVersion);
+                    if (versionData) {
+                        image = versionData.thumbnail || versionData.poster || versionData.url;
+                    }
+                }
             } else {
                 debugError = `Project ID ${projectId} not found in DB`;
                 title = 'Project Not Found';
