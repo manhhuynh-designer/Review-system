@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
     // Default Metadata
     let title = 'Review System';
-    let description = 'Chia sẻ từ Review System';
+    let description = ''; // Will be populated from file/project data
     let image = null;
     let debugError = null; // For debugging output
 
@@ -59,6 +59,7 @@ export default async function handler(req, res) {
             if (fileDoc.exists) {
                 const data = fileDoc.data();
                 title = data.name || 'File';
+                description = data.description || ''; // Use file description if available
 
                 // Find best thumbnail based on file type
                 const currentVersion = data.currentVersion || 1;
@@ -86,6 +87,7 @@ export default async function handler(req, res) {
             if (projectDoc.exists) {
                 const data = projectDoc.data();
                 title = data.name || 'Dự án';
+                description = data.description || ''; // Use project description if available
 
                 // Try to get thumbnail from the first file in the project
                 const filesSnapshot = await db.collection('projects').doc(projectId).collection('files').limit(1).get();
