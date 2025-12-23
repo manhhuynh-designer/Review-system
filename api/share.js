@@ -26,20 +26,19 @@ export default async function handler(req, res) {
     // or the direct path.
     // Let's assume the rewrite rule sends /share/p/... to this function
 
-    const { url } = req;
-    const pathParts = url.split('/').filter(p => p);
+    // Vercel Rewrite sends query params (slug)
+    const { slug } = req.query;
+    const pathParts = Array.isArray(slug) ? slug : (slug || '').split('/');
 
     let projectId = null;
     let fileId = null;
 
-    const pIndex = pathParts.indexOf('p');
-    if (pIndex !== -1 && pathParts[pIndex + 1]) {
-        projectId = pathParts[pIndex + 1];
+    if (pathParts.length > 0) {
+        projectId = pathParts[0];
     }
 
-    const fIndex = pathParts.indexOf('file');
-    if (fIndex !== -1 && pathParts[fIndex + 1]) {
-        fileId = pathParts[fIndex + 1];
+    if (pathParts.length >= 3 && pathParts[1] === 'file') {
+        fileId = pathParts[2];
     }
 
     if (!projectId) {

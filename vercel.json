@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/share/p/:path*",
-      "destination": "/api/share"
+      "destination": "/api/share?slug=:path*"
     },
     {
       "source": "/(.*)",

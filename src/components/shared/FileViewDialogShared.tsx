@@ -188,7 +188,8 @@ export function FileViewDialogShared({
   // Generate shareable link for this file
   const getShareLink = useCallback(() => {
     const baseUrl = window.location.origin
-    return `${baseUrl}/review/${_projectId}/file/${file?.id}`
+    // Use /share/p/ path to trigger metadata generation function
+    return `${baseUrl}/share/p/${_projectId}/file/${file?.id}`
   }, [_projectId, file?.id])
 
   const copyShareLink = useCallback(async () => {
