@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback, memo } from 'react'
-import { Play, Pause, Volume2, VolumeX, Maximize, StickyNote, Camera } from 'lucide-react'
+import { Play, Pause, Volume2, VolumeX, Maximize, StickyNote, Camera, Repeat, PictureInPicture2, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import type { Comment } from '@/types'
 import './CustomVideoPlayer.css'
@@ -51,9 +51,18 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
     const [playbackRate, setPlaybackRate] = useState(1)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isMuted, setIsMuted] = useState(false)
+    const [volume, setVolume] = useState(1)
     const [localCurrentTime, setLocalCurrentTime] = useState(0)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [isPortrait, setIsPortrait] = useState(false)
+
+    // Enhancement states
+    const [showControls, setShowControls] = useState(true)
+    const [isBuffering, setIsBuffering] = useState(false)
+    const [isLooping, setIsLooping] = useState(false)
+    const [hoverTime, setHoverTime] = useState<number | null>(null)
+    const [hoverPosition, setHoverPosition] = useState<number>(0)
+    const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     // Overlay state
     const [videoRatio, setVideoRatio] = useState(16 / 9)
@@ -79,6 +88,201 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
             document.removeEventListener('fullscreenchange', handleFullscreenChange)
         }
     }, [onFullscreenChange])
+
+    // Toggle functions with useCallback for keyboard shortcuts
+    const togglePlayPause = useCallback(() => {
+        if (videoRef.current) {
+            if (videoRef.current.paused) {
+                videoRef.current.play()
+            } else {
+                videoRef.current.pause()
+            }
+        }
+    }, [])
+
+    const toggleMute = useCallback(() => {
+        if (videoRef.current) {
+            const newMuted = !videoRef.current.muted
+            videoRef.current.muted = newMuted
+            setIsMuted(newMuted)
+        }
+    }, [])
+
+    const toggleFullscreen = useCallback(() => {
+        const video = videoRef.current
+        const container = containerRef.current
+
+        const isCurrentlyFullscreen = document.fullscreenElement ||
+            (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement
+
+        if (isCurrentlyFullscreen) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen()
+            } else if ((document as unknown as { webkitExitFullscreen?: () => void }).webkitExitFullscreen) {
+                (document as unknown as { webkitExitFullscreen: () => void }).webkitExitFullscreen()
+            }
+        } else {
+            if (container?.requestFullscreen) {
+                container.requestFullscreen().catch(() => {
+                    if (video && (video as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
+                        (video as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
+                    }
+                })
+            } else if (container && (container as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen) {
+                (container as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen()
+            } else if (video && (video as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
+                (video as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
+            }
+        }
+    }, [])
+
+    const toggleLoop = useCallback(() => {
+        if (videoRef.current) {
+            const newLoop = !videoRef.current.loop
+            videoRef.current.loop = newLoop
+            setIsLooping(newLoop)
+        }
+    }, [])
+
+    const togglePiP = useCallback(async () => {
+        const video = videoRef.current
+        if (!video) return
+
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture()
+            } else if (document.pictureInPictureEnabled) {
+                await video.requestPictureInPicture()
+            }
+        } catch (error) {
+            console.error('PiP error:', error)
+            toast.error('Picture-in-Picture không khả dụng')
+        }
+    }, [])
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const activeElement = document.activeElement
+            if (activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA') return
+
+            const video = videoRef.current
+            if (!video) return
+
+            switch (e.code) {
+                case 'Space':
+                    e.preventDefault()
+                    togglePlayPause()
+                    break
+                case 'KeyM':
+                    e.preventDefault()
+                    toggleMute()
+                    break
+                case 'KeyF':
+                    e.preventDefault()
+                    toggleFullscreen()
+                    break
+                case 'KeyL':
+                    e.preventDefault()
+                    toggleLoop()
+                    break
+                case 'KeyP':
+                    e.preventDefault()
+                    togglePiP()
+                    break
+                case 'ArrowLeft':
+                    e.preventDefault()
+                    video.currentTime = Math.max(0, video.currentTime - 5)
+                    break
+                case 'ArrowRight':
+                    e.preventDefault()
+                    video.currentTime = Math.min(duration, video.currentTime + 5)
+                    break
+                case 'ArrowUp':
+                    e.preventDefault()
+                    {
+                        const newVol = Math.min(1, video.volume + 0.1)
+                        video.volume = newVol
+                        setVolume(newVol)
+                        if (video.muted && newVol > 0) {
+                            video.muted = false
+                            setIsMuted(false)
+                        }
+                    }
+                    break
+                case 'ArrowDown':
+                    e.preventDefault()
+                    {
+                        const newVol = Math.max(0, video.volume - 0.1)
+                        video.volume = newVol
+                        setVolume(newVol)
+                    }
+                    break
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [duration, togglePlayPause, toggleMute, toggleFullscreen, toggleLoop, togglePiP])
+
+    // Auto-hide controls - only hide when playing
+    useEffect(() => {
+        const resetControlsTimeout = () => {
+            setShowControls(true)
+            if (controlsTimeoutRef.current) {
+                clearTimeout(controlsTimeoutRef.current)
+            }
+            // Only auto-hide when video is playing
+            if (isPlaying) {
+                controlsTimeoutRef.current = setTimeout(() => {
+                    setShowControls(false)
+                }, 3000)
+            }
+        }
+
+        const handleMouseLeave = () => {
+            // Only hide on mouse leave if video is playing
+            if (isPlaying) {
+                setShowControls(false)
+            }
+        }
+
+        const container = containerRef.current
+        if (container) {
+            container.addEventListener('mousemove', resetControlsTimeout)
+            container.addEventListener('mouseenter', resetControlsTimeout)
+            container.addEventListener('mouseleave', handleMouseLeave)
+        }
+
+        // Always show controls when video is paused
+        if (!isPlaying) {
+            setShowControls(true)
+            if (controlsTimeoutRef.current) {
+                clearTimeout(controlsTimeoutRef.current)
+            }
+        }
+
+        return () => {
+            if (container) {
+                container.removeEventListener('mousemove', resetControlsTimeout)
+                container.removeEventListener('mouseenter', resetControlsTimeout)
+                container.removeEventListener('mouseleave', handleMouseLeave)
+            }
+            if (controlsTimeoutRef.current) {
+                clearTimeout(controlsTimeoutRef.current)
+            }
+        }
+    }, [isPlaying])
+
+    // Show controls when paused
+    useEffect(() => {
+        if (!isPlaying) {
+            setShowControls(true)
+            if (controlsTimeoutRef.current) {
+                clearTimeout(controlsTimeoutRef.current)
+            }
+        }
+    }, [isPlaying])
 
     useEffect(() => {
         const video = videoRef.current
@@ -132,10 +336,16 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
             onPause?.()
         }
 
+        // Buffering events
+        const handleWaiting = () => setIsBuffering(true)
+        const handleCanPlay = () => setIsBuffering(false)
+
         video.addEventListener('loadedmetadata', handleLoadedMetadata)
         video.addEventListener('timeupdate', handleTimeUpdate)
         video.addEventListener('play', handlePlay)
         video.addEventListener('pause', handlePause)
+        video.addEventListener('waiting', handleWaiting)
+        video.addEventListener('canplay', handleCanPlay)
 
         return () => {
             if (rafId !== null) {
@@ -145,6 +355,8 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
             video.removeEventListener('timeupdate', handleTimeUpdate)
             video.removeEventListener('play', handlePlay)
             video.removeEventListener('pause', handlePause)
+            video.removeEventListener('waiting', handleWaiting)
+            video.removeEventListener('canplay', handleCanPlay)
         }
     }, [onTimeUpdate, onLoadedMetadata, onPlay, onPause])
 
@@ -188,54 +400,33 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
         }
     }
 
-    const togglePlayPause = () => {
+    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newVolume = parseFloat(e.target.value)
         if (videoRef.current) {
-            if (isPlaying) {
-                videoRef.current.pause()
-            } else {
-                videoRef.current.play()
+            videoRef.current.volume = newVolume
+            setVolume(newVolume)
+            if (newVolume === 0 && !isMuted) {
+                setIsMuted(true)
+            } else if (newVolume > 0 && isMuted) {
+                videoRef.current.muted = false
+                setIsMuted(false)
             }
         }
     }
 
-    const toggleMute = () => {
-        if (videoRef.current) {
-            videoRef.current.muted = !isMuted
-            setIsMuted(!isMuted)
-        }
+
+
+    const handleTimelineHover = (e: React.MouseEvent<HTMLDivElement>) => {
+        const timeline = e.currentTarget
+        const rect = timeline.getBoundingClientRect()
+        const hoverX = e.clientX - rect.left
+        const percentage = Math.max(0, Math.min(1, hoverX / rect.width))
+        setHoverTime(percentage * duration)
+        setHoverPosition(hoverX)
     }
 
-    const toggleFullscreen = () => {
-        const video = videoRef.current
-        const container = containerRef.current
-
-        // Check if we're currently in fullscreen
-        const isCurrentlyFullscreen = document.fullscreenElement ||
-            (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement
-
-        if (isCurrentlyFullscreen) {
-            // Exit fullscreen
-            if (document.exitFullscreen) {
-                document.exitFullscreen()
-            } else if ((document as unknown as { webkitExitFullscreen?: () => void }).webkitExitFullscreen) {
-                (document as unknown as { webkitExitFullscreen: () => void }).webkitExitFullscreen()
-            }
-        } else {
-            // Enter fullscreen - try container first, then video for iOS
-            if (container?.requestFullscreen) {
-                container.requestFullscreen().catch(() => {
-                    // Fallback to video element fullscreen for iOS
-                    if (video && (video as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
-                        (video as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
-                    }
-                })
-            } else if (container && (container as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen) {
-                (container as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen()
-            } else if (video && (video as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
-                // iOS Safari fallback - use video's native fullscreen
-                (video as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
-            }
-        }
+    const handleTimelineLeave = () => {
+        setHoverTime(null)
     }
 
     const handleExportFrame = useCallback(async () => {
@@ -346,7 +537,7 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
     }), [handleExportFrame, onTimeUpdate])
 
     return (
-        <div ref={containerRef} className={`custom-video-player ${isPortrait ? 'portrait-video' : 'landscape-video'} ${className}`}>
+        <div ref={containerRef} className={`custom-video-player ${isPortrait ? 'portrait-video' : 'landscape-video'} ${!showControls ? 'controls-hidden' : ''} ${className}`}>
             <video
                 ref={videoRef}
                 src={src}
@@ -360,7 +551,15 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                     objectFit: 'contain'
                 } : undefined}
                 onClick={togglePlayPause}
+                onDoubleClick={toggleFullscreen}
             />
+
+            {/* Loading Spinner */}
+            {isBuffering && (
+                <div className="loading-overlay">
+                    <Loader2 className="loading-spinner" />
+                </div>
+            )}
 
             {/* Video Overlays (Safe Zone + Composition Guides) */}
             <VideoOverlayContainer videoRef={videoRef}>
@@ -377,12 +576,28 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
             <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             {/* Custom Controls */}
-            <div className="video-controls">
+            <div className={`video-controls ${!showControls ? 'hidden' : ''}`}>
                 {/* Timeline with markers */}
-                <div id="video-timeline-container" className="timeline-wrapper" onClick={handleTimelineClick}>
+                <div
+                    id="video-timeline-container"
+                    className="timeline-wrapper"
+                    onClick={handleTimelineClick}
+                    onMouseMove={handleTimelineHover}
+                    onMouseLeave={handleTimelineLeave}
+                >
                     <div className="timeline-track">
                         {/* Progress bar */}
                         <div className="timeline-progress" style={{ width: `${currentProgress}%` }} />
+
+                        {/* Hover time preview */}
+                        {hoverTime !== null && (
+                            <div
+                                className="timeline-hover-preview"
+                                style={{ left: `${hoverPosition}px` }}
+                            >
+                                {formatTime(hoverTime)}
+                            </div>
+                        )}
 
                         {/* Comment markers */}
                         {comments
@@ -428,13 +643,35 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                         </button>
 
-                        <button onClick={toggleMute} className="control-btn" title={isMuted ? 'Unmute' : 'Mute'}>
-                            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                        </button>
+                        <div className="volume-control">
+                            <button onClick={toggleMute} className="control-btn" title={isMuted ? 'Unmute' : 'Mute'}>
+                                {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                            </button>
+                            <div className="volume-slider-container">
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={isMuted ? 0 : volume}
+                                    onChange={handleVolumeChange}
+                                    className="volume-slider"
+                                    title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                                />
+                            </div>
+                        </div>
 
                         <div className="time-display">
                             {formatTime(localCurrentTime)} / {formatTime(duration)}
                         </div>
+
+                        <button onClick={toggleLoop} className={`control-btn ${isLooping ? 'active' : ''}`} title={isLooping ? 'Tắt lặp (L)' : 'Bật lặp (L)'}>
+                            <Repeat className="w-5 h-5" />
+                        </button>
+
+                        <button onClick={togglePiP} className="control-btn" title="Picture-in-Picture (P)">
+                            <PictureInPicture2 className="w-5 h-5" />
+                        </button>
                     </div>
 
                     <div className="controls-right">
@@ -468,6 +705,7 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                             guideColor={guideColor}
                             onGuideColorChange={setGuideColor}
                         />
+
 
                         <button id="video-controls-export" onClick={handleExportFrame} className="control-btn" title="Xuất frame hiện tại">
                             <Camera className="w-5 h-5" />

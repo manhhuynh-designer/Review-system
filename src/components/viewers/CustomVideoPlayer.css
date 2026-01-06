@@ -37,7 +37,38 @@
     pointer-events: none;
 }
 
-/* Video Controls */
+/* Loading Overlay */
+.loading-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 25;
+    pointer-events: none;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    color: white;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Auto-hide Controls */
+.custom-video-player.controls-hidden {
+    cursor: none;
+}
+
 .video-controls {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7));
     padding: 12px 16px 16px;
@@ -47,6 +78,19 @@
     /* Prevent controls from being compressed */
     margin-top: auto;
     /* Push to bottom */
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.video-controls.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Active control button state */
+.control-btn.active {
+    background: rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
 }
 
 /* Timeline Wrapper */
@@ -73,6 +117,23 @@
     background: linear-gradient(90deg, #3b82f6, #2563eb);
     border-radius: 3px;
     transition: width 0.1s linear;
+}
+
+/* Timeline Hover Preview */
+.timeline-hover-preview {
+    position: absolute;
+    bottom: 100%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 15;
 }
 
 /* Timeline Markers */
@@ -218,6 +279,73 @@
     min-width: 100px;
 }
 
+/* Volume Control */
+.volume-control {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.volume-slider-container {
+    width: 0;
+    overflow: hidden;
+    transition: width 0.2s ease;
+}
+
+.volume-control:hover .volume-slider-container {
+    width: 80px;
+    margin-left: 8px;
+}
+
+.volume-slider {
+    width: 80px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    cursor: pointer;
+    outline: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease;
+}
+
+.volume-slider::-moz-range-thumb:hover {
+    transform: scale(1.15);
+}
+
+.volume-slider::-moz-range-track {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    height: 4px;
+}
+
 /* Playback Speed */
 .playback-speed {
     position: relative;
@@ -345,9 +473,12 @@
         font-size: 11px;
     }
 
-    /* Hide volume control on mobile to save space */
-    .controls-left .control-btn[title="Mute"],
-    .controls-left .control-btn[title="Unmute"] {
+    /* Hide volume slider on mobile to save space - keep button only */
+    .volume-slider-container {
+        display: none;
+    }
+
+    .volume-control:hover .volume-slider-container {
         display: none;
     }
 
