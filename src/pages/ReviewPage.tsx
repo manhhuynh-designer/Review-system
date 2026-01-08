@@ -5,13 +5,14 @@ import type { ProjectInvitation } from '@/types'
 import { useProjectStore } from '@/stores/projects'
 import { useFileStore } from '@/stores/files'
 import { useCommentStore } from '@/stores/comments'
+import { useAuthStore } from '@/stores/auth'
 import { toast } from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FileCardShared } from '@/components/shared/FileCardShared'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import { HelpCircle, Download, ShieldAlert, Loader2 } from 'lucide-react'
+import { HelpCircle, Download, ShieldAlert, Loader2, Mail } from 'lucide-react'
 import { resetTourStatus } from '@/lib/fileTours'
 import {
   Dialog,
@@ -30,6 +31,7 @@ export default function ReviewPage() {
   const { project, fetchProject } = useProjectStore()
   const { files, subscribeToFiles, cleanup: cleanupFiles } = useFileStore()
   const { comments, subscribeToComments, addComment, editComment, deleteComment, cleanup: cleanupComments } = useCommentStore()
+  const { user } = useAuthStore()
 
   const [currentUserName, setCurrentUserName] = useState(() => {
     return localStorage.getItem('reviewUserName') || ''
@@ -42,7 +44,7 @@ export default function ReviewPage() {
 
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
-  const { validateToken, verifyOTP, requestOTP } = useInvitationStore()
+  const { validateToken, verifyOTP, requestOTP, recoverAccess } = useInvitationStore()
 
   // Access Control State
   const [accessStatus, setAccessStatus] = useState<'checking' | 'allowed' | 'denied' | 'verification_needed'>('checking')
@@ -51,6 +53,7 @@ export default function ReviewPage() {
   const [otpCode, setOtpCode] = useState('')
   const [verifyingOtp, setVerifyingOtp] = useState(false)
   const hasCheckedAccess = useRef(false)
+
 
   // Device ID Management
   useEffect(() => {
@@ -63,7 +66,20 @@ export default function ReviewPage() {
   // Access Guard Logic
   useEffect(() => {
     const checkAccess = async () => {
-      if (!project || hasCheckedAccess.current) return
+      // Allow re-check if user login status changes, but be careful of loops.
+      // Ideally hasCheckedAccess should be reset if dependencies change significantly?
+      // But for simplicity, we check user first.
+
+      if (!project) return // Wait for project load
+
+      // 0. ADMIN BYPASS
+      if (user) {
+        setAccessStatus('allowed')
+        setLoading(false)
+        return
+      }
+
+      if (hasCheckedAccess.current) return
 
       // 1. If public, allow immediately
       if (project.accessLevel !== 'token_required') {
@@ -108,37 +124,13 @@ export default function ReviewPage() {
       // 5. Check Device Binding (Multi-Device Logic)
       const allowedDevices = result.invitation.allowedDevices || []
 
-      // If it's the FIRST device (empty list), we surely bind it? 
-      // Actually per plan: "First Access: System adds this deviceId... Access Granted" via invite acceptance logic?
-      // Store logic `validateToken` returns invitation. We need a way to "accept/bind" if strictly needed.
-      // But `allowedDevices` check is key.
-
       if (allowedDevices.includes(deviceId)) {
         setAccessStatus('allowed')
       } else {
-        // If list is empty, bind this first device automatically?
-        // Or strictly require OTP?
-        // Plan said: "First Access: User clicks link... System adds this deviceId... Access Granted immediately."
-        // We can do this automatically if allowedDevices is empty.
-
         if (allowedDevices.length === 0) {
-          // Auto-bind first device
-          // We need an action in store to "bindDevice(invitationId, deviceId)" without OTP
-          // For now, let's treat "empty allowedDevices" as "needs verification" to be safe?
-          // No, user experience: first click should work.
-          // However inviteStore.verifyOTP does the binding. We need `bindFirstDevice`.
-          // Let's assume we can trust the first click token possession as "proof".
-          // I'll call `verifyOTP` with a special flag or add `bindDevice` to store?
-          // Or just use `verifyOTP` logic but bypass code check? 
-          // Better: Add `autoBindFirstDevice` to store.
-          // For now, I will use "verification_needed" for everything to be safe, OR implementing auto-bind.
-          // Let's implement auto-bind logic here directly or via a new store method.
-          // Since I can't easily change store right now without context switch, I will show verification.
-          // Wait, I can try to use `verifyOTP` hack or just ask user to verify.
-          // Actually, simpler: If allowedDevices is empty, show "Welcome! This device will be linked." -> Click OK -> Calls bind.
-
+          // First time, treat as needing verification (or auto-bind logic if desired)
+          // We stick to current plan: verification needed.
           setAccessStatus('verification_needed')
-          // I'll handle "First Time" specialized UI in the render.
         } else {
           setAccessStatus('verification_needed')
         }
@@ -151,23 +143,13 @@ export default function ReviewPage() {
     if (project) {
       checkAccess()
     }
-  }, [project, token, validateToken, deviceId, fileId])
+  }, [project, token, validateToken, deviceId, fileId, user])
 
   const handleDeviceVerification = async () => {
     if (!invitation) return
     setVerifyingOtp(true)
     try {
-      // If fresh invite (no devices), we can just bind without OTP? 
-      // Security risk: if attacker steals link, they verify first.
-      // Plan said "Lock on First Use". So yes, first user to click IS the owner.
       if (invitation.allowedDevices.length === 0) {
-        // Auto bind
-        await verifyOTP(invitation.id, 'AUTO_BIND', deviceId) // Need to support this in store or update logic
-        // Since store expects code... I should update logic to support "first time".
-        // For now, let's just trigger requestOTP to be consistent and secure. 
-        // Sending email even for first time ensures they actually own the email properly? 
-        // But standard Magic Link flow is: Click -> Access.
-        // I'll stick to: Click -> OTP -> Access. It's safer.
         await requestOTP(invitation.id)
       } else {
         await verifyOTP(invitation.id, otpCode, deviceId)
@@ -177,11 +159,6 @@ export default function ReviewPage() {
       const result = await validateToken(invitation.token)
       if (result.invitation && result.invitation.allowedDevices.includes(deviceId)) {
         setAccessStatus('allowed')
-      } else {
-        // If we force OTP even for first time
-        if (invitation.allowedDevices.length === 0) {
-          // After OTP req...
-        }
       }
     } catch (e) {
       toast.error('Xác thực thất bại')
@@ -189,6 +166,8 @@ export default function ReviewPage() {
       setVerifyingOtp(false)
     }
   }
+
+
 
   // Bulk download hook
   const {
@@ -394,6 +373,49 @@ export default function ReviewPage() {
     }
   }
 
+  // Recovery State
+  const [recoveryEmail, setRecoveryEmail] = useState('')
+  const [recovering, setRecovering] = useState(false)
+  const [accessCode, setAccessCode] = useState('')
+  const [showCodeInput, setShowCodeInput] = useState(false)
+  const [verifyingCode, setVerifyingCode] = useState(false)
+
+  const handleRecoverAccess = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!recoveryEmail || !projectId) return
+
+    setRecovering(true)
+    try {
+      await recoverAccess(projectId, recoveryEmail)
+      setShowCodeInput(true)
+      // Optional: Show check email message permanently or instructions
+    } catch (error) {
+      // Toast handled in store
+    } finally {
+      setRecovering(false)
+    }
+  }
+
+  const handleVerifyAccessCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!projectId || !recoveryEmail || !accessCode) return
+
+    setVerifyingCode(true)
+    try {
+      const token = await useInvitationStore.getState().verifyAccessCode(projectId, recoveryEmail, accessCode, deviceId)
+      if (token) {
+        // Redirect to url with token
+        const url = new URL(window.location.href)
+        url.searchParams.set('token', token)
+        window.location.href = url.toString()
+      }
+    } catch (error) {
+      // Toast handled in store
+    } finally {
+      setVerifyingCode(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -408,17 +430,74 @@ export default function ReviewPage() {
   if (accessStatus === 'denied') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-card border rounded-lg p-6 text-center space-y-6 shadow-lg">
+        <div className="max-w-md w-full bg-card border rounded-lg p-6 space-y-6 shadow-lg">
           <div className="w-16 h-16 mx-auto bg-destructive/10 rounded-full flex items-center justify-center">
             <ShieldAlert className="w-8 h-8 text-destructive" />
           </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold text-destructive">Truy cập bị từ chối</h2>
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-bold text-destructive">Đường dẫn không hợp lệ hoặc đã hết hạn</h2>
             <p className="text-muted-foreground">{accessError}</p>
           </div>
-          <Button variant="outline" onClick={() => window.location.reload()}>
-            Thử lại
-          </Button>
+
+          <div className="pt-4 border-t space-y-4">
+            <div className="text-center space-y-2">
+              <h3 className="font-semibold text-foreground">Bạn đã có lời mời trước đó?</h3>
+              <p className="text-sm text-muted-foreground">
+                {showCodeInput
+                  ? `Nhập mã xác thực đã được gửi đến ${recoveryEmail}`
+                  : "Nhập email của bạn để nhận mã truy cập mới."}
+              </p>
+            </div>
+
+            {!showCodeInput ? (
+              <form onSubmit={handleRecoverAccess} className="space-y-4">
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="name@example.com"
+                      className="pl-10"
+                      value={recoveryEmail}
+                      onChange={e => setRecoveryEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full" disabled={recovering}>
+                  {recovering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {recovering ? 'Đang gửi...' : 'Gửi mã xác thực'}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyAccessCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Nhập mã 6 số"
+                    className="text-center text-lg tracking-widest"
+                    value={accessCode}
+                    onChange={e => setAccessCode(e.target.value)}
+                    maxLength={6}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={verifyingCode}>
+                  {verifyingCode ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {verifyingCode ? 'Đang kiểm tra...' : 'Truy cập'}
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => setShowCodeInput(false)}>
+                  Quay lại nhập Email
+                </Button>
+              </form>
+            )}
+          </div>
+
+          <div className="text-center">
+            <Button variant="link" onClick={() => window.location.reload()}>
+              Thử lại link hiện tại
+            </Button>
+          </div>
         </div>
       </div>
     )

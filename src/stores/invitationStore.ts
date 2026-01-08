@@ -37,6 +37,8 @@ interface InvitationState {
     validateToken: (token: string) => Promise<{ isValid: boolean, invitation?: ProjectInvitation, error?: string }>
     requestOTP: (invitationId: string) => Promise<void>
     verifyOTP: (invitationId: string, code: string, deviceId: string) => Promise<boolean>
+    recoverAccess: (projectId: string, email: string) => Promise<void>
+    verifyAccessCode: (projectId: string, email: string, code: string, deviceId: string) => Promise<string>
 }
 
 export const useInvitationStore = create<InvitationState>((set) => ({
@@ -203,5 +205,48 @@ export const useInvitationStore = create<InvitationState>((set) => ({
         })
 
         return true
+    },
+
+    recoverAccess: async (projectId: string, email: string) => {
+        try {
+            const { httpsCallable } = await import('firebase/functions')
+            const { functions } = await import('../lib/firebase')
+
+            const resendAccessLink = httpsCallable(functions, 'resendAccessLink')
+
+            await resendAccessLink({
+                projectId,
+                email,
+                origin: window.location.origin
+            })
+
+            toast.success('Đã gửi mã xác thực vào email')
+        } catch (error: any) {
+            // Map Firebase function errors to user-friendly messages
+            if (error.code === 'not-found' || error.message?.includes('not-found')) {
+                toast.error('Email này không có trong danh sách mời')
+                throw new Error('Email not found')
+            }
+            console.error('Recover access error:', error)
+            toast.error('Gửi lại thất bại: ' + (error.message || 'Lỗi hệ thống'))
+            throw error
+        }
+    },
+
+    verifyAccessCode: async (projectId: string, email: string, code: string, deviceId: string) => {
+        try {
+            const { httpsCallable } = await import('firebase/functions')
+            const { functions } = await import('../lib/firebase')
+
+            const verifyFn = httpsCallable(functions, 'verifyAccessCode')
+            const result = await verifyFn({ projectId, email, code, deviceId }) as { data: { token: string } }
+
+            return result.data.token
+        } catch (error: any) {
+            console.error('Verify code error:', error)
+            toast.error(error.message || 'Mã xác thực không đúng')
+            throw error
+        }
     }
 }))
+

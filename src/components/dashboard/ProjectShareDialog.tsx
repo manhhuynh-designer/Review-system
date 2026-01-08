@@ -19,11 +19,12 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { useInvitationStore } from '@/stores/invitationStore'
-import { Share2, Mail, Link as LinkIcon, Trash2, CheckCircle } from 'lucide-react'
+import { Share2, Mail, Link as LinkIcon, Trash2, CheckCircle, Globe, Lock } from 'lucide-react'
 import { Clock } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { vi } from 'date-fns/locale'
+import { useProjectStore } from '@/stores/projects'
+import { useInvitationStore } from '@/stores/invitationStore'
 
 interface ProjectShareDialogProps {
     projectId: string
@@ -90,6 +91,25 @@ export function ProjectShareDialog({
         inv => inv.resourceId === resourceId
     )
 
+    // Project Access Level Logic
+    // We need to fetch/watch the project to know its current accessLevel
+    // Since we are inside a dialog, we can assume the parent might pass it or we use the store
+    // For simplicity, let's look it up from the store if possible, or assume passed props?
+    // The previous prompt suggested passing it. Let's start by using the store if the project is loaded.
+    const { projects, updateProject } = useProjectStore()
+    const project = projects.find(p => p.id === projectId)
+
+    const currentAccess = project?.accessLevel || 'token_required' // Default to restricted if unknown
+
+    const handleAccessChange = async (newLevel: 'public' | 'token_required') => {
+        if (!projectId) return
+        try {
+            await updateProject(projectId, { accessLevel: newLevel })
+        } catch (error) {
+            // Toast handled in store
+        }
+    }
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -115,6 +135,35 @@ export function ProjectShareDialog({
                     </TabsList>
 
                     <TabsContent value="invite" className="space-y-4 py-4">
+                        {/* General Access Section (Quick Toggle) */}
+                        {resourceType === 'project' && (
+                            <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20 mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-full ${currentAccess === 'public' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'}`}>
+                                        {currentAccess === 'public' ? <Globe className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium">
+                                            {currentAccess === 'public' ? 'Công khai (Bất kỳ ai có link)' : 'Hạn chế (Chỉ người được mời)'}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {currentAccess === 'public'
+                                                ? 'Không cần đăng nhập để xem'
+                                                : 'Cần email hoặc mã OTP để truy cập'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-primary hover:text-primary/90"
+                                    onClick={() => handleAccessChange(currentAccess === 'public' ? 'token_required' : 'public')}
+                                >
+                                    Thay đổi
+                                </Button>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <Label htmlFor="emails">Email người nhận</Label>
                             <div className="relative">
@@ -137,17 +186,18 @@ export function ProjectShareDialog({
                                 id="private"
                                 checked={isPrivate}
                                 onCheckedChange={(c) => setIsPrivate(c as boolean)}
+                                disabled={currentAccess === 'token_required'} // Always private if project is restricted? strict mode
                             />
                             <div className="grid gap-1.5 leading-none">
                                 <Label
                                     htmlFor="private"
                                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                 >
-                                    Chế độ bảo mật (OTP)
+                                    Chế độ bảo mật cao (OTP)
                                 </Label>
                                 <p className="text-xs text-muted-foreground">
                                     Người nhận sẽ cần xác thực mã OTP gửi về email mỗi khi truy cập trên thiết bị mới.
-                                    Link sẽ không thể chia sẻ công khai.
+                                    {currentAccess === 'public' && " (Sẽ tự động chuyển dự án sang chế độ Hạn chế)"}
                                 </p>
                             </div>
                         </div>

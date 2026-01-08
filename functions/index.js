@@ -295,3 +295,129 @@ exports.validateFileUpload = functions.storage.object().onFinalize(async (object
 
   return null;
 });
+
+exports.resendAccessLink = functions.https.onCall(async (data, context) => {
+  const { projectId, email } = data;
+
+  // Basic validation
+  if (!projectId || !email) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing project ID or email');
+  }
+
+  // 1. Check if there is an existing invitation for this email & project
+  const invitationsRef = admin.firestore().collection('project_invitations');
+  const snapshot = await invitationsRef
+    .where('projectId', '==', projectId)
+    .where('email', '==', email)
+    .where('status', 'in', ['pending', 'accepted']) // Only consider active invites
+    .get();
+
+  if (snapshot.empty) {
+    // Security: Don't reveal if email exists or not?
+    // User requirement: "kiểm tra nếu mail không có trong list share thì báo lỗi"
+    // So we throw NOT FOUND error.
+    throw new functions.https.HttpsError('not-found', 'Email này không có trong danh sách được mời.');
+  }
+
+  // 2. Generate NEW invitation (Keep old ones active)
+  const crypto = require('crypto');
+  const newToken = crypto.randomBytes(16).toString('hex'); // 32 chars
+  const accessCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit code
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 60 * 1000); // Code valid for 30 mins
+
+  const oldData = snapshot.docs[0].data();
+
+  const newInvitation = {
+    ...oldData,
+    token: newToken,
+    status: 'pending',
+    createdAt: now,
+    revokedAt: null,
+    allowedDevices: [],
+    verificationCode: null,
+    accessCode: { // New field for recovery OTP
+      code: accessCode,
+      expiresAt: expiresAt
+    }
+  };
+
+  delete newInvitation.id;
+
+  const batch = admin.firestore().batch();
+  const newInviteRef = invitationsRef.doc(newToken);
+  batch.set(newInviteRef, newInvitation);
+
+  // 3. Send Email
+  const mailRef = admin.firestore().collection('mail').doc();
+  const origin = data.origin || 'https://review-system-b8883.web.app';
+  const link = `${origin}/review/${projectId}?token=${newToken}`;
+
+  batch.set(mailRef, {
+    to: email,
+    message: {
+      subject: `[Code: ${accessCode}] Link truy cập dự án: ${oldData.resourceType === 'project' ? 'Project' : 'File'}`,
+      html: `
+        <p>Bạn đã yêu cầu gửi lại link truy cập.</p>
+        <p>Mã truy cập của bạn là: <strong>${accessCode}</strong></p>
+        <p>Hoặc truy cập trực tiếp bằng link bên dưới:</p>
+        <a href="${link}">Truy cập ngay</a>
+        <p>Mã và Link có hiệu lực trong 30 phút (cho việc nhập mã).</p>
+      `
+    }
+  });
+
+  await batch.commit();
+
+  return { success: true, message: 'Link và mã truy cập mới đã được gửi vào email của bạn.' };
+});
+
+exports.verifyAccessCode = functions.https.onCall(async (data, context) => {
+  const { projectId, email, code, deviceId } = data;
+
+  if (!projectId || !email || !code) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing info');
+  }
+
+  const invitationsRef = admin.firestore().collection('project_invitations');
+  const snapshot = await invitationsRef
+    .where('projectId', '==', projectId)
+    .where('email', '==', email)
+    .where('status', 'in', ['pending', 'accepted'])
+    .get();
+
+  if (snapshot.empty) {
+    throw new functions.https.HttpsError('not-found', 'Email không tồn tại');
+  }
+
+  // Find the invitation that matches the code
+  const match = snapshot.docs.find(doc => {
+    const d = doc.data();
+    return d.accessCode && d.accessCode.code === code;
+  });
+
+  if (!match) {
+    throw new functions.https.HttpsError('invalid-argument', 'Mã xác thực không đúng');
+  }
+
+  const invitation = match.data();
+  if (invitation.accessCode.expiresAt.toMillis() < Date.now()) {
+    throw new functions.https.HttpsError('failed-precondition', 'Mã xác thực đã hết hạn');
+  }
+
+  // Code is valid. Bind the device if provided.
+  const updates = {
+    accessCode: null
+  };
+
+  if (deviceId) {
+    const allowed = invitation.allowedDevices || [];
+    if (!allowed.includes(deviceId)) {
+      updates.allowedDevices = [...allowed, deviceId];
+    }
+  }
+
+  await match.ref.update(updates);
+
+  return { token: match.id };
+});
