@@ -3,7 +3,10 @@ import type { File as FileType } from '@/types'
 import { format } from 'date-fns'
 import { formatFileSize } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { FileImage, Video, Box, MessageSquare, Clock, ShieldAlert, Loader2 } from 'lucide-react'
+import { FileImage, Video, Box, MessageSquare, Clock, ShieldAlert, Loader2, MoreHorizontal, Share2 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { ProjectShareDialog } from '@/components/dashboard/ProjectShareDialog'
 
 interface Props {
   file: FileType
@@ -147,6 +150,30 @@ export function FileCard({ file, resolvedUrl, commentCount, onClick }: Props) {
             {format(uploadDate, 'dd/MM/yy')}
           </span>
         </div>
+      </div>
+
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="secondary" size="icon" className="h-6 w-6 rounded-full bg-white/90 hover:bg-white text-black shadow-sm">
+              <MoreHorizontal className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <ProjectShareDialog
+              projectId={file.projectId}
+              resourceType="file"
+              resourceId={file.id}
+              resourceName={file.name}
+              trigger={
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Chia sẻ
+                </DropdownMenuItem>
+              }
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )

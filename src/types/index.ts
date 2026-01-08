@@ -36,6 +36,40 @@ export interface Project {
   trashedAt?: Timestamp // When project was moved to trash
   previousStatus?: 'active' | 'archived' // To restore to correct state
   isCommentsLocked?: boolean
+  accessLevel?: 'public' | 'token_required'
+}
+
+export interface ProjectInvitation {
+  id: string
+  projectId: string
+  // Granular Access Control
+  resourceType: 'project' | 'file'
+  resourceId: string // projectId or fileId
+
+  email: string
+  token: string
+  status: 'pending' | 'accepted' | 'revoked' | 'expired'
+  createdAt: Timestamp
+  expiresAt?: Timestamp
+  // For Trigger Email Extension
+  to?: string
+  message?: {
+    subject: string
+    html: string
+  }
+  delivery?: {
+    state: string
+    startTime: Timestamp
+    endTime: Timestamp
+    error?: string
+  }
+  // Security: Device Binding
+  allowedDevices: string[] // Array of authorized deviceIds
+  verificationCode?: {
+    code: string
+    expiresAt: Timestamp
+    attempts: number
+  }
 }
 
 export interface FileVersion {

@@ -34,9 +34,9 @@ export function DeleteConfirmDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Xác nhận xóa file</DialogTitle>
+                    <DialogTitle>Chuyển vào thùng rác</DialogTitle>
                     <DialogDescription>
-                        Bạn có chắc chắn muốn xóa file này? Hành động này không thể hoàn tác.
+                        Bạn có chắc chắn muốn chuyển file này vào thùng rác?
                     </DialogDescription>
                 </DialogHeader>
 
@@ -56,11 +56,11 @@ export function DeleteConfirmDialog({
                         </div>
                     </div>
 
-                    <Alert variant="destructive">
+                    <Alert>
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
-                            File sẽ bị xóa vĩnh viễn khỏi Firebase Storage và Firestore.
-                            Dung lượng sẽ được giải phóng: <strong>{formatBytes(fileSize)}</strong>
+                            File sẽ được chuyển vào thùng rác và <strong>vẫn chiếm dung lượng</strong>.
+                            Hãy xóa vĩnh viễn từ thùng rác để giải phóng {formatBytes(fileSize)}.
                         </AlertDescription>
                     </Alert>
                 </div>
@@ -78,7 +78,7 @@ export function DeleteConfirmDialog({
                         onClick={onConfirm}
                         disabled={loading}
                     >
-                        {loading ? 'Đang xóa...' : 'Xác nhận xóa'}
+                        {loading ? 'Đang xử lý...' : 'Chuyển vào thùng rác'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

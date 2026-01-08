@@ -20,8 +20,10 @@ export function formatBytes(bytes: number, decimals = 2): string {
  */
 export function calculateTotalSize(files: FileType[]): number {
     return files.reduce((total, file) => {
-        const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-        return total + (currentVersion?.metadata?.size || 0)
+        const fileTotal = file.versions.reduce((verTotal, version) => {
+            return verTotal + (version.metadata?.size || 0)
+        }, 0)
+        return total + fileTotal
     }, 0)
 }
 

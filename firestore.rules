@@ -105,5 +105,31 @@ service cloud.firestore {
     match /test/{document=**} {
       allow read, write: if isAuthenticated();
     }
+
+    // Project Invitations
+    match /project_invitations/{token} {
+      // Public can read if they know the token (ID)
+      allow get: if true;
+      
+      // Admins can list (for dashboard)
+      allow list: if isAuthenticated();
+
+      // Admins can create
+      allow create: if isAuthenticated();
+
+      // Public can update (for device verification), ideally restricted to specific fields
+      // but simplistic "true" relies on token secrecy (which is the ID)
+      allow update: if true;
+      
+      // Admins can delete/revoke
+      allow delete: if isAuthenticated();
+    }
+
+    // Mail collection for Trigger Email Extension
+    match /mail/{mailId} {
+      allow create: if isAuthenticated();
+      // Only allow reading own emails if needed, but for now strict create only is safer for privacy
+      // unless we track 'author'. System will write to this.
+    }
   }
 }

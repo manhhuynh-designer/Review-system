@@ -115,8 +115,8 @@ export function DataTable({
                     comparison = a.name.localeCompare(b.name)
                     break
                 case 'size': {
-                    const sizeA = a.versions.find(v => v.version === a.currentVersion)?.metadata?.size || 0
-                    const sizeB = b.versions.find(v => v.version === b.currentVersion)?.metadata?.size || 0
+                    const sizeA = a.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+                    const sizeB = b.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
                     comparison = sizeA - sizeB
                     break
                 }
@@ -400,8 +400,8 @@ export function DataTable({
                             </TableRow>
                         ) : (
                             paginatedFiles.map((file) => {
-                                const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                                const size = currentVersion?.metadata?.size || 0
+
+                                const size = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
                                 const isSelected = selectedFiles.has(file.id)
 
                                 return (

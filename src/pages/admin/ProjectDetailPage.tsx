@@ -13,6 +13,7 @@ import { ArrowUpDown, Calendar, FileType, Download, Search, X, Share2, Check } f
 import type { Project } from '@/types'
 import { toast } from 'react-hot-toast'
 import { ProjectEditDialog } from '@/components/projects/ProjectEditDialog'
+import { ProjectShareDialog } from '@/components/dashboard/ProjectShareDialog'
 
 type SortOption = 'name' | 'date' | 'type' | 'size'
 type SortDirection = 'asc' | 'desc'
@@ -119,6 +120,10 @@ export default function ProjectDetailPage() {
               </>
             )}
           </Button>
+          <ProjectShareDialog
+            projectId={projectId!}
+            resourceName={project.name}
+          />
           {projectId && <UploadDialog projectId={projectId} />}
         </div>
       </div>

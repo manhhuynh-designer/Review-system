@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFileStore } from '@/stores/files'
 import { useProjectStore } from '@/stores/projects'
 import { useCommentStore } from '@/stores/comments'
+import { useStatisticsStore } from '@/stores/statistics'
 import { Button } from '@/components/ui/button'
 import { Download, RefreshCw } from 'lucide-react'
 import { StorageOverviewCard } from '@/components/dashboard/StorageOverviewCard'
@@ -12,6 +13,7 @@ import { DataTable } from '@/components/dashboard/DataTable'
 import { DeleteConfirmDialog } from '@/components/dashboard/DeleteConfirmDialog'
 import { ExportDataDialog } from '@/components/dashboard/ExportDataDialog'
 import { RecentCommentsCard } from '@/components/dashboard/RecentCommentsCard'
+import { OrphanCleanupDialog } from '@/components/dashboard/OrphanCleanupDialog'
 import { FileViewDialogShared } from '@/components/shared/FileViewDialogShared'
 import { formatBytes, calculateTotalSize } from '@/lib/storageUtils'
 import type { File as FileType, Comment } from '@/types'
@@ -204,9 +206,9 @@ export default function DashboardPage() {
         }
 
         files.forEach(file => {
-            const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-            if (currentVersion && file.type in byType) {
-                byType[file.type as keyof typeof byType] += currentVersion.metadata?.size || 0
+            const fileTotalSize = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+            if (file.type in byType) {
+                byType[file.type as keyof typeof byType] += fileTotalSize
             }
         })
 
@@ -246,10 +248,8 @@ export default function DashboardPage() {
                 stats.fileCount++
             }
 
-            const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-            if (currentVersion) {
-                stats.totalSize += currentVersion.metadata?.size || 0
-            }
+            const fileTotalSize = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+            stats.totalSize += fileTotalSize
         })
 
         comments.forEach(comment => {
@@ -279,8 +279,8 @@ export default function DashboardPage() {
                 projectStatus: project?.status
             }
         }).sort((a, b) => {
-            const sizeA = a.versions.find(v => v.version === a.currentVersion)?.metadata?.size || 0
-            const sizeB = b.versions.find(v => v.version === b.currentVersion)?.metadata?.size || 0
+            const sizeA = a.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+            const sizeB = b.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
             return sizeB - sizeA
         })
 
@@ -335,8 +335,7 @@ export default function DashboardPage() {
         const file = statistics.largestFiles.find(f => f.id === fileId)
         if (!file) return
 
-        const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-        const size = currentVersion?.metadata?.size || 0
+        const size = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
 
         setSelectedFile({
             id: fileId,
@@ -600,6 +599,12 @@ export default function DashboardPage() {
                         <Download className="w-4 h-4 sm:mr-2" />
                         <span className="hidden sm:inline">Export Data</span>
                     </Button>
+                    <OrphanCleanupDialog
+                        onCleanupComplete={() => {
+                            // Reload stats after cleanup
+                            useStatisticsStore.getState().calculateStorageUsage(adminEmail)
+                        }}
+                    />
                 </div>
             </div>
 

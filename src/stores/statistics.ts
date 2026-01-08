@@ -115,16 +115,13 @@ export const useStatisticsStore = create<StatisticsState>((set, get) => ({
                 const file = doc.data() as FileType
                 fileCount++
 
-                // Calculate size from current version
-                const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                if (currentVersion) {
-                    const size = currentVersion.metadata?.size || 0
-                    totalSize += size
+                // Calculate size from all versions
+                const fileTotalSize = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+                totalSize += fileTotalSize
 
-                    // Add to type breakdown
-                    if (file.type in byType) {
-                        byType[file.type as keyof typeof byType] += size
-                    }
+                // Add to type breakdown
+                if (file.type in byType) {
+                    byType[file.type as keyof typeof byType] += fileTotalSize
                 }
             })
 
@@ -142,14 +139,12 @@ export const useStatisticsStore = create<StatisticsState>((set, get) => ({
                         const file = doc.data() as FileType
                         fileCount++
 
-                        const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                        if (currentVersion) {
-                            const size = currentVersion.metadata?.size || 0
-                            totalSize += size
+                        // Calculate size from all versions
+                        const fileTotalSize = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+                        totalSize += fileTotalSize
 
-                            if (file.type in byType) {
-                                byType[file.type as keyof typeof byType] += size
-                            }
+                        if (file.type in byType) {
+                            byType[file.type as keyof typeof byType] += fileTotalSize
                         }
                     })
                 }
@@ -193,10 +188,8 @@ export const useStatisticsStore = create<StatisticsState>((set, get) => ({
                 let totalSize = 0
                 filesSnapshot.docs.forEach(doc => {
                     const file = doc.data() as FileType
-                    const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                    if (currentVersion) {
-                        totalSize += currentVersion.metadata?.size || 0
-                    }
+                    const fileTotalSize = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+                    totalSize += fileTotalSize
                 })
 
                 // Get comments for this project
@@ -336,10 +329,10 @@ export const useStatisticsStore = create<StatisticsState>((set, get) => ({
                 })
             }
 
-            // Sort by size (largest first)
+            // Sort by total size (all versions) descending
             allFiles.sort((a, b) => {
-                const sizeA = a.versions.find(v => v.version === a.currentVersion)?.metadata?.size || 0
-                const sizeB = b.versions.find(v => v.version === b.currentVersion)?.metadata?.size || 0
+                const sizeA = a.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+                const sizeB = b.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
                 return sizeB - sizeA
             })
 
@@ -415,10 +408,8 @@ export const useStatisticsStore = create<StatisticsState>((set, get) => ({
             // Calculate total storage
             let totalStorageBytes = 0
             files.forEach(file => {
-                const currentVersion = file.versions.find(v => v.version === file.currentVersion)
-                if (currentVersion) {
-                    totalStorageBytes += currentVersion.metadata?.size || 0
-                }
+                const fileTotalSize = file.versions.reduce((acc, v) => acc + (v.metadata?.size || 0), 0)
+                totalStorageBytes += fileTotalSize
             })
 
             const exportData: ExportData = {
