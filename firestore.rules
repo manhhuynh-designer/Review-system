@@ -8,6 +8,11 @@ service cloud.firestore {
 
     // Projects collection
     match /projects/{projectId} {
+      function isProjectActive() {
+        let project = get(/databases/$(database)/documents/projects/$(projectId)).data;
+        return project.status == 'active';
+      }
+
       // Public read (for review links)
       allow read: if true;
 
@@ -31,7 +36,8 @@ service cloud.firestore {
         // Only authenticated users can create/update/delete files
         allow create: if isAuthenticated() 
           && request.resource.data.name is string
-          && request.resource.data.name.size() > 0;
+          && request.resource.data.name.size() > 0
+          && isProjectActive();
           
         allow update, delete: if isAuthenticated();
       }
@@ -55,7 +61,8 @@ service cloud.firestore {
           // Prevent honeypot fields commonly used in anti-bot checks
           !('website' in request.resource.data) &&
           !('phone' in request.resource.data) &&
-          !('email' in request.resource.data);
+          !('email' in request.resource.data) &&
+          isProjectActive();
 
         // Only authenticated admins can update/delete
         allow update, delete: if isAuthenticated();

@@ -34,6 +34,7 @@ interface ProjectState {
   trashProject: (id: string) => Promise<void> // Alias for deleteProject
   restoreProject: (id: string) => Promise<void> // Restore from trash
   permanentDeleteProject: (id: string) => Promise<void> // Hard delete
+  archiveProject: (id: string, archiveUrl: string) => Promise<void>
   toggleProjectLock: (id: string, isLocked: boolean) => Promise<void>
   selectProject: (project: Project | null) => void
   cleanup: () => void
@@ -232,6 +233,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       toast.success('Đã xóa vĩnh viễn dự án')
     } catch (error: any) {
       toast.error('Lỗi xóa vĩnh viễn: ' + error.message)
+      throw error
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  archiveProject: async (id: string, archiveUrl: string) => {
+    set({ loading: true })
+    try {
+      const now = Timestamp.now()
+
+      // 1. Update project status and metadata
+      await updateDoc(doc(db, 'projects', id), {
+        status: 'archived',
+        archiveUrl,
+        archivedAt: now,
+        updatedAt: now,
+        isCommentsLocked: true // Auto-lock comments when archiving
+      })
+
+      toast.success('Dự án đã được lưu trữ')
+    } catch (error: any) {
+      toast.error('Lỗi khi lưu trữ dự án: ' + error.message)
       throw error
     } finally {
       set({ loading: false })

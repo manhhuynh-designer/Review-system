@@ -48,6 +48,7 @@ interface FileState {
   deleteSequenceFrames: (projectId: string, fileId: string, version: number, indicesToDelete: number[]) => Promise<void>
   deleteVersion: (projectId: string, fileId: string, version: number) => Promise<void>
   toggleFileLock: (projectId: string, fileId: string, isLocked: boolean) => Promise<void>
+  cleanupProjectFiles: (projectId: string) => Promise<void>
   cleanup: () => void
 }
 
@@ -930,6 +931,93 @@ export const useFileStore = create<FileState>((set, get) => ({
     } catch (error) {
       console.error('Error toggling file lock:', error)
       toast.error('Lỗi khi cập nhật trạng thái khóa bình luận')
+    }
+  },
+
+  cleanupProjectFiles: async (projectId: string) => {
+    set({ deleting: true })
+    try {
+      console.log(`🧹 Starting deep cleanup for project ${projectId}`)
+
+      // Get all files for this project
+      const filesQuery = query(collection(db, 'projects', projectId, 'files'))
+      const snapshot = await getDocs(filesQuery)
+      const projectFiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FileModel[]
+
+      for (const file of projectFiles) {
+        console.log(`📄 Cleaning up file ${file.name} (${file.id})`)
+
+        for (const version of file.versions) {
+          const isLatest = version.version === file.currentVersion
+          const hasThumbnail = !!(version.thumbnailUrl || version.shareThumbnailUrl)
+
+          try {
+            // 1. Delete original file data
+            // Only delete the latest version's original file if we have a thumbnail to show instead
+            const shouldDeleteOriginal = !isLatest || hasThumbnail
+
+            if (shouldDeleteOriginal) {
+              if (file.type === 'sequence' && version.sequenceUrls) {
+                for (const url of version.sequenceUrls) {
+                  try { await deleteObject(ref(storage, url)) } catch (e) { /* skip */ }
+                }
+              } else if (version.url) {
+                // Check if the URL is actually a thumbnail before deleting (though usually it's the original)
+                const isUrlDifferentFromThumb = version.url !== version.thumbnailUrl && version.url !== version.shareThumbnailUrl
+                if (isUrlDifferentFromThumb) {
+                  try {
+                    const fileRef = ref(storage, version.url)
+                    await deleteObject(fileRef)
+                  } catch (e) { /* skip */ }
+                }
+              }
+            }
+
+            // 2. Handle Thumbnails for non-latest
+            if (!isLatest) {
+              if (version.thumbnailUrl) {
+                try { await deleteObject(ref(storage, version.thumbnailUrl)) } catch (e) { /* skip */ }
+              }
+              if (version.shareThumbnailUrl) {
+                try { await deleteObject(ref(storage, version.shareThumbnailUrl)) } catch (e) { /* skip */ }
+              }
+            } else {
+              console.log(`✨ Preserving Visuals for latest version v${version.version}`)
+            }
+          } catch (err) {
+            console.warn(`⚠️ Error during cleanup of version ${version.version}:`, err)
+          }
+        }
+
+        // 3. Update file document to reflect it's cleared but preserve metadata for UI
+        const fileRef = doc(db, 'projects', projectId, 'files', file.id)
+
+        const updatedVersions = file.versions.map(v => {
+          const isLatest = v.version === file.currentVersion
+          const bestThumb = v.thumbnailUrl || v.shareThumbnailUrl || (isLatest ? v.url : '')
+
+          return {
+            ...v,
+            url: bestThumb, // Point URL to the preserved thumbnail
+            sequenceUrls: isLatest && !bestThumb && v.sequenceUrls ? [v.sequenceUrls[0]] : [], // Keep 1st frame if nothing else
+            validationStatus: 'clean'
+          }
+        })
+
+        await updateDoc(fileRef, {
+          versions: updatedVersions,
+          isDataCleared: true,
+          updatedAt: Timestamp.now()
+        })
+      }
+
+      toast.success('Đã dọn dẹp dung lượng lưu trữ dự án')
+    } catch (error: any) {
+      console.error('❌ Deep cleanup failed:', error)
+      toast.error('Lỗi khi dọn dẹp dữ liệu: ' + error.message)
+      throw error
+    } finally {
+      set({ deleting: false })
     }
   },
 

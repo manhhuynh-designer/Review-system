@@ -20,7 +20,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu'
-import { LogOut, FolderOpen, Home, ChevronDown, Plus, Users, User, BarChart3, Menu } from 'lucide-react'
+import { LogOut, FolderOpen, ChevronDown, Plus, Users, User, BarChart3, Menu } from 'lucide-react'
+
 import { useEffect, useState } from 'react'
 
 export function AdminLayout() {
@@ -84,13 +85,13 @@ export function AdminLayout() {
             {/* Logo/Brand */}
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={() => navigate('/app/projects')}
-              className="flex items-center gap-2 h-9 px-2 sm:px-3"
+              className="h-9 w-9"
             >
-              <Home className="w-4 h-4" />
-              <span className="font-semibold text-sm sm:text-base">Review System</span>
+              <img src="/review-system-logo.svg" alt="Review System" className="w-6 h-6" />
             </Button>
+
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-1 ml-2">

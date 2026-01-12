@@ -22,7 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Pencil, X, UserPlus } from 'lucide-react'
+import { Pencil, X, UserPlus, Link2 } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
 import { ClientDialog } from '@/components/clients/ClientDialog'
 
@@ -41,6 +41,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
     project.deadline ? new Date(project.deadline.toMillis()).toISOString().split('T')[0] : ''
   )
   const [tags, setTags] = useState(project.tags?.join(', ') || '')
+  const [archiveUrl, setArchiveUrl] = useState(project.archiveUrl || '')
 
   const { updateProject, loading } = useProjectStore()
   const { clients, subscribeToClients } = useClientStore()
@@ -66,7 +67,8 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
         clientName: selectedClient?.name || undefined,
         clientEmail: selectedClient?.email || undefined,
         deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : undefined,
-        tags: tags.trim() ? tags.split(',').map(t => t.trim()).filter(Boolean) : []
+        tags: tags.trim() ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        archiveUrl: archiveUrl.trim() || undefined
       }
 
       await updateProject(project.id, updateData)
@@ -173,6 +175,20 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="animation, 3d, urgent (phân tách bằng dấu phẩy)"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="archiveUrl">Link lưu trữ <span className="text-xs text-muted-foreground">(Bắt buộc khi lưu trữ)</span></Label>
+              <div className="relative">
+                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="archiveUrl"
+                  value={archiveUrl}
+                  onChange={(e) => setArchiveUrl(e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  className="pl-9"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">

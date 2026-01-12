@@ -22,6 +22,7 @@ const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage'))
 const InstallationPage = lazy(() => import('./pages/InstallationPage'))
 const UsagePage = lazy(() => import('./pages/UsagePage'))
 const ServicesPage = lazy(() => import('./pages/ServicesPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 // Loading component
 const PageLoader = () => (
@@ -178,6 +179,14 @@ const router = createBrowserRouter([
     element: (
       <Suspense fallback={<PageLoader />}>
         <ServicesPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '*',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <NotFoundPage />
       </Suspense>
     ),
   },

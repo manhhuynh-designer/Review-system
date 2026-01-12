@@ -25,6 +25,8 @@ import { getSecureDownloadUrl } from '@/lib/secureStorage'
 import type { File as FileType } from '@/types'
 import { useBulkDownload } from '@/hooks/useBulkDownload'
 import { DownloadProgressDialog } from '@/components/dashboard/DownloadProgressDialog'
+import { Archive, ExternalLink } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
 export default function ReviewPage() {
   const { projectId, fileId } = useParams<{ projectId: string; fileId?: string }>()
@@ -580,6 +582,8 @@ export default function ReviewPage() {
 
   const projectFiles = files.filter(f => f.projectId === projectId)
 
+  const isArchived = project.status === 'archived'
+
   return (
     <div className="min-h-screen bg-background">
       <DownloadProgressDialog
@@ -618,7 +622,15 @@ export default function ReviewPage() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-2 flex-1">
-              <h1 className="text-3xl font-bold">{project.name}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold">{project.name}</h1>
+                {isArchived && (
+                  <Badge variant="secondary" className="gap-1 text-amber-600 bg-amber-100 border-amber-200">
+                    <Archive className="h-3 w-3" />
+                    Đã lưu trữ
+                  </Badge>
+                )}
+              </div>
               {project.description && (
                 <p className="text-muted-foreground">{project.description}</p>
               )}
@@ -660,6 +672,36 @@ export default function ReviewPage() {
           </div>
         </div>
       </div>
+
+      {/* Archive Notice Banner */}
+      {isArchived && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <Archive className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-amber-900">Dự án này đã được lưu trữ</p>
+                  <p className="text-sm text-amber-700">Bình luận đã bị khóa. Chỉ hiển thị ảnh thumbnail còn lại.</p>
+                </div>
+              </div>
+              {project.archiveUrl && (
+                <a
+                  href={project.archiveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-4 py-2 rounded-lg transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Xem file gốc
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="container mx-auto px-4 py-8">
