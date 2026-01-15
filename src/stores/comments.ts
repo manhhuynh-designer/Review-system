@@ -13,7 +13,6 @@ import {
 } from 'firebase/firestore'
 import type { Unsubscribe } from 'firebase/firestore'
 import { db, uploadCommentAttachments } from '../lib/firebase'
-import { createNotification } from '../lib/notifications'
 import type { Comment } from '../types'
 import toast from 'react-hot-toast'
 

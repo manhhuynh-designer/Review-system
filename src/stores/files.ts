@@ -16,7 +16,6 @@ import {
 import type { Unsubscribe } from 'firebase/firestore'
 import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
-import { createNotification } from '../lib/notifications'
 import type { File as FileModel, FileType, FileVersion } from '../types'
 import { generateId } from '../lib/utils'
 import toast from 'react-hot-toast'
