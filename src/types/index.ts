@@ -144,6 +144,7 @@ export interface Comment {
   }[]
   isPending?: boolean // Optimistic UI state
   isEdited?: boolean
+  origin?: string // URL origin where comment was created (e.g. https://view.manhhuynh.work or http://localhost:5173)
   updatedAt?: Timestamp
   reactions?: Record<string, string[]> // reactionType -> array of userIds
 }

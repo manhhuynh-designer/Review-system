@@ -137,6 +137,7 @@ export const useCommentStore = create<CommentState>((set, get) => ({
         isPinned: false,
         annotationData: annotationData ?? null,
         createdAt: Timestamp.now(),
+        origin: window.location.origin, // Capture current domain (e.g., https://view.manhhuynh.work)
         attachments: null,
         imageUrls: null
       })

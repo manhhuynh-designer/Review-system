@@ -483,7 +483,9 @@ exports.onCommentCreated = functions.firestore
       }
 
       if (recipientEmails.length > 0) {
-        const projectLink = `https://review-system-b8883.web.app/admin/projects/${projectId}`;
+        // Use origin from comment if available (for custom domains), otherwise fallback to firebase default
+        const baseUrl = comment.origin || `https://${process.env.GCLOUD_PROJECT}.web.app`;
+        const projectLink = `${baseUrl}/admin/projects/${projectId}`;
         const mailRef = admin.firestore().collection('mail').doc();
         await mailRef.set({
           to: recipientEmails, // Array of email recipients
