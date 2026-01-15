@@ -4,13 +4,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useFileStore } from '@/stores/files'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Bell, 
-  Check, 
-  CheckCheck, 
-  FileUp, 
-  MessageSquare, 
-  CheckCircle2 
+import {
+  Bell,
+  Check,
+  CheckCheck,
+  FileUp,
+  MessageSquare,
+  CheckCircle2
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -25,13 +25,13 @@ import { useNavigate } from 'react-router-dom'
 
 export function NotificationBell() {
   const { user } = useAuthStore()
-  const { 
-    notifications, 
-    unreadCount, 
-    subscribeToNotifications, 
-    markAsRead, 
+  const {
+    notifications,
+    unreadCount,
+    subscribeToNotifications,
+    markAsRead,
     markAllAsRead,
-    cleanup 
+    cleanup
   } = useNotificationStore()
   const { files, selectFile } = useFileStore()
   const navigate = useNavigate()
@@ -40,13 +40,13 @@ export function NotificationBell() {
   useEffect(() => {
     if (user?.email) {
       const normalized = user.email.toLowerCase()
-      console.log('👤 NotificationBell: User email detected (normalized):', normalized)
+
       subscribeToNotifications(normalized)
     } else {
-      console.log('⚠️ NotificationBell: No user email')
+
     }
     return () => {
-      console.log('🧹 NotificationBell: Cleaning up')
+
       cleanup()
     }
   }, [user?.email, subscribeToNotifications, cleanup])
@@ -55,7 +55,7 @@ export function NotificationBell() {
     if (!notification.isRead) {
       await markAsRead(notification.id)
     }
-    
+
     // If notification has fileId, find and select the file
     if (notification.fileId) {
       const file = files.find(f => f.id === notification.fileId)
@@ -63,7 +63,7 @@ export function NotificationBell() {
         selectFile(file)
       }
     }
-    
+
     // Navigate to project (will trigger FilesList to open dialog if file was selected)
     navigate(`/app/projects/${notification.projectId}`)
     setOpen(false)
@@ -96,8 +96,8 @@ export function NotificationBell() {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
+            <Badge
+              variant="destructive"
               className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
             >
               {unreadCount > 9 ? '9+' : unreadCount}
@@ -109,9 +109,9 @@ export function NotificationBell() {
         <div className="flex items-center justify-between px-2 py-2 border-b">
           <h3 className="font-semibold text-sm">Thông báo</h3>
           {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="h-7 text-xs"
               onClick={handleMarkAllRead}
             >
@@ -131,9 +131,8 @@ export function NotificationBell() {
             {displayNotifications.map((notification) => (
               <DropdownMenuItem
                 key={notification.id}
-                className={`flex items-start gap-3 p-3 cursor-pointer ${
-                  !notification.isRead ? 'bg-primary/5' : ''
-                }`}
+                className={`flex items-start gap-3 p-3 cursor-pointer ${!notification.isRead ? 'bg-primary/5' : ''
+                  }`}
                 onClick={() => handleNotificationClick(notification)}
               >
                 <div className="mt-0.5 shrink-0">
@@ -160,7 +159,7 @@ export function NotificationBell() {
                 )}
               </DropdownMenuItem>
             ))}
-            
+
             {notifications.length > 10 && (
               <>
                 <DropdownMenuSeparator />

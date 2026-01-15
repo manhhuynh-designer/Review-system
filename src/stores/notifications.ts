@@ -1,12 +1,12 @@
 import { create } from 'zustand'
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  doc, 
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  doc,
   Timestamp,
   writeBatch,
   getDocs
@@ -19,7 +19,7 @@ interface NotificationStore {
   unreadCount: number
   loading: boolean
   error: string | null
-  
+
   // Actions
   subscribeToNotifications: (adminEmail: string) => void
   createNotification: (data: {
@@ -47,61 +47,61 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
 
   subscribeToNotifications: (adminEmail: string) => {
     const normalizedEmail = adminEmail ? String(adminEmail).toLowerCase() : adminEmail
-    console.log('🔔 Subscribing to notifications for:', normalizedEmail)
-    
+
+
     if (unsubscribe) {
-      console.log('🔄 Cleaning up existing subscription')
+
       unsubscribe()
     }
-    
+
     set({ loading: true, error: null })
-    
+
     try {
       // Temporary: Query without orderBy until index is created
       const q = query(
         collection(db, 'notifications'),
         where('adminEmail', '==', normalizedEmail)
       )
-      
-      console.log('📡 Setting up real-time listener for notifications (without orderBy - waiting for index)')
-      
+
+
+
       unsubscribe = onSnapshot(
         q,
         (snapshot) => {
-          console.log('📬 Received notification update, docs count:', snapshot.docs.length)
-          
+
+
           const notifications = snapshot.docs.map(doc => {
             const data = doc.data()
-            console.log('📨 Notification:', { id: doc.id, ...data })
+
             return {
               id: doc.id,
               ...data
             }
           }) as Notification[]
-          
+
           // Sort manually since we can't use orderBy yet
           notifications.sort((a, b) => {
             const aTime = a.createdAt?.toDate?.()?.getTime() || 0
             const bTime = b.createdAt?.toDate?.()?.getTime() || 0
             return bTime - aTime
           })
-          
+
           const unreadCount = notifications.filter(n => !n.isRead).length
-          
-          console.log('📊 Notification stats:', { total: notifications.length, unread: unreadCount })
-          
-          set({ 
-            notifications, 
+
+
+
+          set({
+            notifications,
             unreadCount,
             loading: false,
-            error: null 
+            error: null
           })
         },
         (error) => {
           console.error('❌ Notifications subscription error:', error)
-          set({ 
-            loading: false, 
-            error: 'Failed to load notifications' 
+          set({
+            loading: false,
+            error: 'Failed to load notifications'
           })
         }
       )
@@ -144,14 +144,14 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
         where('adminEmail', '==', normalizedEmail),
         where('isRead', '==', false)
       )
-      
+
       const snapshot = await getDocs(q)
       const batch = writeBatch(db)
-      
+
       snapshot.docs.forEach((docSnapshot) => {
         batch.update(docSnapshot.ref, { isRead: true })
       })
-      
+
       await batch.commit()
     } catch (error) {
       console.error('Failed to mark all as read:', error)
@@ -164,11 +164,11 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
       unsubscribe()
       unsubscribe = null
     }
-    set({ 
-      notifications: [], 
+    set({
+      notifications: [],
       unreadCount: 0,
-      loading: false, 
-      error: null 
+      loading: false,
+      error: null
     })
   }
 }))

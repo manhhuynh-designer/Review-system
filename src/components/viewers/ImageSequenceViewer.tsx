@@ -840,12 +840,12 @@ function GridFrameCard({
       {/* Image */}
       <button
         onClick={onSelect}
-        className="w-full aspect-square relative overflow-hidden bg-muted/20 group/image"
+        className="w-full aspect-square relative overflow-hidden bg-muted/30 group/image"
       >
         <img
           src={url}
           alt={`Frame ${frameNumber + 1}`}
-          className="w-full h-full object-cover transition-transform group-hover/image:scale-105"
+          className="w-full h-full object-contain transition-transform group-hover/image:scale-105"
         />
         <div className="absolute top-2 left-2 bg-background/90 backdrop-blur-sm border border-border/50 px-2 py-1 rounded text-xs font-mono">
           {String(frameNumber + 1).padStart(3, '0')} / {String(frameCount).padStart(3, '0')}
@@ -902,9 +902,9 @@ function GridFrameCard({
         ) : (
           <div className="relative group/caption">
             {caption ? (
-              <p className="text-xs text-muted-foreground line-clamp-2">
+              <div className="text-xs text-muted-foreground break-words whitespace-pre-wrap">
                 {linkifyText(caption)}
-              </p>
+              </div>
             ) : (
               <p className="text-xs text-muted-foreground/50 italic">Chưa có chú thích</p>
             )}
@@ -1008,12 +1008,12 @@ function SortableGridFrameCard({
       {/* Image */}
       <button
         onClick={onSelect}
-        className="w-full aspect-square relative overflow-hidden bg-muted/20 group/image"
+        className="w-full aspect-square relative overflow-hidden bg-muted/30 group/image"
       >
         <img
           src={url}
           alt={`Frame ${frameNumber + 1}`}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
         />
         <div className="absolute bottom-2 left-2 bg-background/90 backdrop-blur-sm border border-border/50 px-2 py-1 rounded text-xs font-mono">
           {String(frameNumber + 1).padStart(3, '0')} / {String(frameCount).padStart(3, '0')}
@@ -1022,9 +1022,9 @@ function SortableGridFrameCard({
 
       {/* Compact Caption Preview */}
       <div className="p-2 bg-background">
-        <p className="text-xs text-muted-foreground line-clamp-1">
-          {caption || <span className="italic text-muted-foreground/50">Chưa có chú thích</span>}
-        </p>
+        <div className="text-xs text-muted-foreground break-words whitespace-pre-wrap">
+          {caption ? linkifyText(caption) : <span className="italic text-muted-foreground/50">Chưa có chú thích</span>}
+        </div>
       </div>
     </div>
   )

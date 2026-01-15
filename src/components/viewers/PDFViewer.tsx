@@ -8,7 +8,7 @@ import 'react-pdf/dist/Page/TextLayer.css'
 // Configure PDF.js worker
 const workerUrl = '/pdf.worker.min.mjs'
 
-console.log('🔧 Initializing PDF worker with URL:', workerUrl)
+
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 

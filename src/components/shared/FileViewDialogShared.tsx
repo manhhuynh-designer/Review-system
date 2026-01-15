@@ -181,6 +181,12 @@ export function FileViewDialogShared({
   const [isResizing, setIsResizing] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  // Image zoom level (applies to image + annotations)
+  const [zoom, setZoom] = useState(1)
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
+
   // Upload & Drag-n-Drop State
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [droppedFiles, setDroppedFiles] = useState<File[]>([])
@@ -273,13 +279,24 @@ export function FileViewDialogShared({
       // reset compare selectors when file changes
       setLeftVersion(null)
       setRightVersion(null)
-      // Reset video time when switching versions
+
+      // Reset view state when file/version changes
+      setZoom(1)
+      setPanOffset({ x: 0, y: 0 })
+
       // Reset video time when switching versions
       if (customVideoPlayerRef.current) {
         customVideoPlayerRef.current.seekTo(0)
       }
     }
   }, [file?.currentVersion, file?.id])
+
+  // Auto-center when zoom is 1 or less
+  useEffect(() => {
+    if (zoom <= 1) {
+      setPanOffset({ x: 0, y: 0 })
+    }
+  }, [zoom])
 
   // Drag and Drop Handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -734,11 +751,6 @@ export function FileViewDialogShared({
     document.body.style.userSelect = 'none'
   }
 
-  // Image zoom level (applies to image + annotations)
-  const [zoom, setZoom] = useState(1)
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
-  const [isDragging, setIsDragging] = useState(false)
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
 
   // Local caption state for real-time updates
   const [localFrameCaptions, setLocalFrameCaptions] = useState<Record<number, string> | undefined>()
@@ -924,7 +936,7 @@ export function FileViewDialogShared({
                   </div>
                   <div className="flex-1 bg-muted/20 flex items-center justify-center">
                     {leftUrl ? (
-                      <img src={leftUrl} alt={`v${lv}`} className="w-full h-auto max-h-[62vh] object-contain" />
+                      <img src={leftUrl} alt={`v${lv}`} className="w-full h-full object-contain" />
                     ) : (
                       <div className="text-sm text-muted-foreground">Không có ảnh</div>
                     )}
@@ -952,7 +964,7 @@ export function FileViewDialogShared({
                   </div>
                   <div className="flex-1 bg-muted/20 flex items-center justify-center">
                     {rightUrl ? (
-                      <img src={rightUrl} alt={`v${rv}`} className="w-full h-auto max-h-[62vh] object-contain" />
+                      <img src={rightUrl} alt={`v${rv}`} className="w-full h-full object-contain" />
                     ) : (
                       <div className="text-sm text-muted-foreground">Không có ảnh</div>
                     )}
@@ -998,7 +1010,7 @@ export function FileViewDialogShared({
 
           {/* Scaled content wrapper (image + annotations) */}
           <div
-            className="origin-center cursor-grab active:cursor-grabbing"
+            className="origin-center cursor-grab active:cursor-grabbing w-full h-full flex items-center justify-center"
             ref={(el) => {
               if (!el) return
               const pe = zoom > 1 ? 'auto' : 'none'
@@ -1026,7 +1038,7 @@ export function FileViewDialogShared({
             <img
               src={effectiveUrl}
               alt={file.name}
-              className="w-auto h-auto max-w-full max-h-full object-contain"
+              className="w-full h-full object-contain"
             />
 
             {renderAnnotationOverlay()}

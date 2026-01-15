@@ -47,7 +47,7 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     if (projectId) {
-      console.log('🎯 Loading files for project:', projectId)
+
       subscribeToFiles(projectId)
     }
     return () => cleanupFiles()

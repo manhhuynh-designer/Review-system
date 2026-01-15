@@ -64,7 +64,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   subscribeToFiles: (projectId: string) => {
     // Check if already subscribed to this project
     if (get().unsubscribes.has(projectId)) {
-      console.log(`📂 Already subscribed to files for project ${projectId}`)
+
       return
     }
 
@@ -104,7 +104,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   uploadFile: async (projectId: string, file: File, existingFileId?: string) => {
-    console.log('🚀 Upload started:', { projectId, fileName: file.name, size: file.size, existingFileId })
+
     set({ uploading: true, uploadProgress: 0, error: null })
 
     // Client-side Security Check
@@ -141,7 +141,7 @@ export const useFileStore = create<FileState>((set, get) => ({
       console.log('☁️ Storage path:', storagePath)
 
       const storageRef = ref(storage, storagePath)
-      console.log('⬆️ Starting upload to storage (resumable)...')
+
       const uploadTask = uploadBytesResumable(storageRef, file)
 
       const url: string = await new Promise((resolve, reject) => {
@@ -163,9 +163,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           }
         })
       })
-      console.log('✅ Upload completed, getting download URL...')
-      console.log('🔗 Download URL obtained:', url)
-      console.log('🔗 Download URL obtained:', url)
+
 
       // Create version metadata
       const newVersion: FileVersion = {
@@ -306,7 +304,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         }
       }
 
-      console.log('🎉 Upload process completed successfully!')
+
 
       // Generate share thumbnail in background (non-blocking)
       generateShareThumbnail().catch(err => console.warn('Share thumbnail generation failed:', err))
@@ -333,7 +331,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   uploadSequence: async (projectId: string, files: File[], name: string, fps: number = 24, existingFileId?: string) => {
-    console.log('🎬 Sequence upload started:', { projectId, name, frameCount: files.length, fps, existingFileId })
+
     set({ uploading: true, uploadProgress: 0, error: null })
 
     // Client-side Security Check
@@ -360,7 +358,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           currentVersion = existingFile.currentVersion + 1
         }
       }
-      console.log('🔢 Version:', currentVersion)
+
 
       // Upload all frames to Storage (track progress across all frames)
       const sequenceUrls: string[] = []
@@ -373,7 +371,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         const file = sortedFiles[i]
 
         const storagePath = `projects/${projectId}/${fileId}/v${currentVersion}/frames/${String(i).padStart(4, '0')}_${file.name}`
-        console.log(`⬆️ Uploading frame ${i + 1}/${sortedFiles.length}: ${storagePath}`)
+
 
         const storageRef = ref(storage, storagePath)
         const uploadTask = uploadBytesResumable(storageRef, file)
@@ -400,7 +398,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         })
       }
 
-      console.log('✅ All frames uploaded, getting URLs...')
+
 
       // Create version metadata
       const newVersion: FileVersion = {
@@ -418,21 +416,21 @@ export const useFileStore = create<FileState>((set, get) => ({
         },
         validationStatus: 'pending'
       }
-      console.log('📝 Version metadata created:', newVersion)
+
 
       // Update or create Firestore doc
       if (existingFileId) {
-        console.log('🔄 Updating existing sequence...')
+
         const fileRef = doc(db, 'projects', projectId, 'files', fileId)
         const existingFile = get().files.find(f => f.id === existingFileId)
         await updateDoc(fileRef, {
           versions: [...(existingFile?.versions || []), newVersion],
           currentVersion
         })
-        console.log('✅ Existing sequence updated')
+
         toast.success(`Đã tải phiên bản ${currentVersion} của ${existingFile?.name}`)
       } else {
-        console.log('📄 Creating new sequence document...')
+
         const fileRef = doc(db, 'projects', projectId, 'files', fileId)
         const newFileData = {
           name,
@@ -442,9 +440,9 @@ export const useFileStore = create<FileState>((set, get) => ({
           sequenceViewMode: 'video' as const, // Default view mode
           createdAt: Timestamp.now()
         }
-        console.log('📋 New sequence data:', newFileData)
+
         await setDoc(fileRef, newFileData)
-        console.log('✅ New sequence created')
+
         toast.success(`Đã tải lên sequence "${name}" với ${sequenceUrls.length} frames`)
 
         // Create notification for new sequence upload
@@ -461,7 +459,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         }
       }
 
-      console.log('🎉 Sequence upload completed successfully!')
+
     } catch (error: any) {
       console.error('❌ Sequence upload failed:', error)
       console.error('Error details:', {
@@ -494,7 +492,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         isTrashed: true,
         trashedAt: Timestamp.now()
       })
-      console.log(`🗑️ File moved to trash: ${fileId}`)
+
 
       toast.success(`Đã chuyển "${file.name}" vào thùng rác`)
     } catch (error: any) {
@@ -526,7 +524,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         isTrashed: false,
         trashedAt: null
       })
-      console.log(`♻️ File restored: ${fileId}`)
+
 
       toast.success(`Đã khôi phục "${file.name}"`)
     } catch (error: any) {
@@ -556,16 +554,16 @@ export const useFileStore = create<FileState>((set, get) => ({
             // Delete all frames in sequence
             for (let i = 0; i < version.sequenceUrls.length; i++) {
               const framePath = `projects/${projectId}/${fileId}/v${version.version}/frames/${String(i).padStart(4, '0')}_*`
-              console.log(`🗑️ Would delete frame: ${framePath}`)
+
             }
             const versionFolderPath = `projects/${projectId}/${fileId}/v${version.version}/`
-            console.log(`🗑️ Deleting sequence folder: ${versionFolderPath}`)
+
           } else {
             // Single file deletion
             const storagePath = `projects/${projectId}/${fileId}/v${version.version}/${version.metadata.name}`
             const storageRef = ref(storage, storagePath)
             await deleteObject(storageRef)
-            console.log(`🗑️ Deleted storage file: ${storagePath}`)
+
           }
 
           // Delete thumbnails if they exist
@@ -593,11 +591,9 @@ export const useFileStore = create<FileState>((set, get) => ({
         deleteDoc(docSnap.ref)
       )
       await Promise.all(deleteCommentPromises)
-      console.log(`🗑️ Deleted ${commentsSnapshot.size} comments`)
 
-      // Delete the file document from Firestore
-      await deleteDoc(doc(db, 'projects', projectId, 'files', fileId))
-      console.log(`✅ File permanently deleted: ${fileId}`)
+
+
 
       toast.success(`Đã xóa vĩnh viễn "${file.name}"`)
     } catch (error: any) {

@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react'
 
 export function AdminLayout() {
   const { user, signOut } = useAuthStore()
-  const { projects, subscribeToProjects, isSubscribed } = useProjectStore()
+  const { projects, subscribeToProjects } = useProjectStore()
   const location = useLocation()
   const navigate = useNavigate()
   const { projectId } = useParams()
@@ -36,19 +36,12 @@ export function AdminLayout() {
   const isProjectDetail = location.pathname.includes('/projects/') && projectId
   const isProjectsList = location.pathname === '/app/projects'
 
-  console.log('🧮 AdminLayout render:', {
-    user: user?.email,
-    projectsCount: projects.length,
-    isSubscribed,
-    currentPath: location.pathname,
-    projectId,
-    currentProject: currentProject?.name
-  })
+
 
   // Subscribe to projects when user is available
   useEffect(() => {
     if (user?.email) {
-      console.log('🔄 AdminLayout: Ensuring subscription for', user.email)
+
       subscribeToProjects(user.email)
     }
   }, [user?.email, subscribeToProjects])
