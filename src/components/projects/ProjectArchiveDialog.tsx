@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useProjectStore } from '@/stores/projects'
 import { useFileStore } from '@/stores/files'
 import { Button } from '@/components/ui/button'
@@ -23,9 +23,16 @@ interface ProjectArchiveDialogProps {
 }
 
 export function ProjectArchiveDialog({ project, open, onOpenChange }: ProjectArchiveDialogProps) {
-    const [archiveUrl, setArchiveUrl] = useState('')
+    const [archiveUrl, setArchiveUrl] = useState(project.archiveUrl || '')
     const [confirmText, setConfirmText] = useState('')
     const [step, setStep] = useState<'info' | 'confirm'>('info')
+
+    // Reset url when dialog opens
+    useEffect(() => {
+        if (open) {
+            setArchiveUrl(project.archiveUrl || '')
+        }
+    }, [open, project.archiveUrl])
 
     const archiveProject = useProjectStore(s => s.archiveProject)
     const cleanupProjectFiles = useFileStore(s => s.cleanupProjectFiles)
@@ -77,7 +84,7 @@ export function ProjectArchiveDialog({ project, open, onOpenChange }: ProjectArc
                 }
             }
         }}>
-            <DialogContent className="sm:max-w-[500px] overflow-hidden">
+            <DialogContent className="sm:max-w-[500px] overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <DialogHeader className="space-y-2">
                     <DialogTitle className="flex items-center gap-2 pr-6">
                         <Archive className="h-5 w-5 text-amber-500 flex-shrink-0" />

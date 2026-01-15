@@ -40,13 +40,14 @@ export function ProjectDeleteDialog({ project }: ProjectDeleteDialogProps) {
             e.preventDefault()
             setOpen(true)
           }}
+          onClick={(e) => e.stopPropagation()}
           className="text-destructive focus:text-destructive"
         >
           <Trash2 className="h-4 w-4 mr-2" />
           Xóa dự án
         </DropdownMenuItem>
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
           <AlertDialogTitle>Xác nhận xóa dự án</AlertDialogTitle>
           <AlertDialogDescription>

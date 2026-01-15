@@ -87,10 +87,13 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           {triggerAsMenuItem ? (
-            <DropdownMenuItem onSelect={(e) => {
-              e.preventDefault()
-              setOpen(true)
-            }}>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault()
+                setOpen(true)
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <Pencil className="h-4 w-4 mr-2" />
               Chỉnh sửa
             </DropdownMenuItem>
@@ -101,7 +104,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
             </Button>
           )}
         </DialogTrigger>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
             <DialogTitle>Chỉnh sửa dự án</DialogTitle>
           </DialogHeader>

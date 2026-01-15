@@ -14,7 +14,7 @@ import {
   where
 } from 'firebase/firestore'
 import type { Unsubscribe } from 'firebase/firestore'
-import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject, getMetadata } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
 import type { File as FileModel, FileType, FileVersion } from '../types'
 import { generateId } from '../lib/utils'
@@ -928,6 +928,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           // Determine best available thumbnail to preserve
           let preservedUrl = version.thumbnailUrl || version.shareThumbnailUrl || ''
           let preservedSequenceUrls: string[] = []
+          let newSize = version.metadata.size // Default to keep original size if update fails
 
           try {
             // STRATEGY: Delete heavy assets, keep lightweight thumbnails
@@ -964,15 +965,76 @@ export const useFileStore = create<FileState>((set, get) => ({
               }
 
             } else {
-              // 3. VIDEO / MODEL / PDF: Always delete original if it exists
-              if (version.url) {
+              // 3. VIDEO / MODEL / PDF
+              // Only delete original if we have a valid thumbnail to show
+              if (preservedUrl && version.url) {
                 // Don't delete if the URL is actually one of the thumbnails (rare edge case in data)
                 if (version.url !== version.thumbnailUrl && version.url !== version.shareThumbnailUrl) {
                   try { await deleteObject(ref(storage, version.url)) } catch (e) { /* silent fail */ }
                   console.log(`📦 Heavy file deleted: ${file.type}`)
                 }
+              } else {
+                // No valid thumbnail exists. Let's try to generate one before giving up.
+                console.log(`⚠️ No existing thumbnail for ${file.type}. Attempting generation...`)
+
+                try {
+                  let generatedBlob: Blob | null = null
+
+                  if (file.type === 'video') {
+                    const { generateVideoThumbnail } = await import('../lib/shareThumbnail')
+                    generatedBlob = await generateVideoThumbnail(version.url)
+                  } else if (file.type === 'pdf') {
+                    const { generatePdfThumbnail } = await import('../lib/shareThumbnail')
+                    generatedBlob = await generatePdfThumbnail(version.url)
+                  }
+
+                  if (generatedBlob) {
+                    const shareThumbnailPath = `projects/${projectId}/${file.id}/v${version.version}/share_thumbnail.jpg`
+                    const shareThumbnailRef = ref(storage, shareThumbnailPath)
+                    await uploadBytes(shareThumbnailRef, generatedBlob)
+                    preservedUrl = await getDownloadURL(shareThumbnailRef)
+
+                    // Update version with new thumbnail URL so we don't lose track of it if we crash/reload
+                    try {
+                      // We'll update the whole doc at the end, but good to know we have it.
+                    } catch (e) { /* ignore */ }
+
+                    console.log(`✅ Generated emergency thumbnail: ${preservedUrl}`)
+
+                    // Now safe to delete original
+                    if (version.url && version.url !== preservedUrl) {
+                      try { await deleteObject(ref(storage, version.url)) } catch (e) { /* silent fail */ }
+                      console.log(`📦 Heavy file deleted after thumbnail generation: ${file.type}`)
+                    }
+                  } else {
+                    // Failed to generate or type not supported (e.g. model) - Keep original
+                    preservedUrl = version.url
+                    console.log(`⚠️ Generation failed or unsupported. Keeping original: ${file.type}`)
+                  }
+                } catch (genErr) {
+                  console.error('Failed to generate emergency thumbnail:', genErr)
+                  // Fallback: Keep original
+                  preservedUrl = version.url
+                }
               }
             }
+
+            // --- RECALCULATE SIZE START ---
+            // Now that we've cleaned up, let's get the actual size of the preserved asset
+            if (preservedUrl) {
+              try {
+                // We reference the preserved URL (thumbnail or remaining frame)
+                const meta = await getMetadata(ref(storage, preservedUrl))
+                newSize = meta.size
+                console.log(`📏 Updated size for ${file.name} v${version.version}: ${version.metadata.size} -> ${newSize}`)
+              } catch (sizeErr) {
+                console.warn('Could not fetch new size metadata, keeping old size:', sizeErr)
+              }
+            } else {
+              // If no URL preserved (shouldn't happen for visual files), size is 0
+              newSize = 0
+            }
+            // --- RECALCULATE SIZE END ---
 
           } catch (err) {
             console.warn(`⚠️ Error during cleanup of version ${version.version}:`, err)
@@ -983,6 +1045,10 @@ export const useFileStore = create<FileState>((set, get) => ({
             ...version,
             url: preservedUrl,
             sequenceUrls: preservedSequenceUrls,
+            metadata: {
+              ...version.metadata,
+              size: newSize // Update size to reflect actual storage usage
+            },
             validationStatus: 'clean' // Mark as archived/cleaned
           })
         }
