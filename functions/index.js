@@ -465,7 +465,8 @@ exports.onCommentCreated = functions.firestore
       // 2. Create email document (if adminEmail exists)
       if (projectData.adminEmail) {
         const projectLink = `https://review-system-b8883.web.app/admin/projects/${projectId}`;
-        await admin.firestore().collection('mail').add({
+        const mailRef = admin.firestore().collection('mail').doc();
+        await mailRef.set({
           to: projectData.adminEmail,
           message: {
             subject: `[Review System] Bình luận mới: ${comment.userName || 'Anonymous'} trong ${projectData.name}`,
