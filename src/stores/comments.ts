@@ -158,24 +158,8 @@ export const useCommentStore = create<CommentState>((set, get) => ({
         })
       }
 
-      // Get project and file info for notification
-      const projectDoc = await getDoc(doc(db, 'projects', projectId))
-      const fileDoc = await getDoc(doc(db, 'projects', projectId, 'files', fileId))
-
-      if (projectDoc.exists()) {
-        const projectData = projectDoc.data()
-        const fileName = fileDoc.exists() ? fileDoc.data().name : 'file'
-
-        // Create notification for admin (don't await - fire and forget)
-        createNotification({
-          type: 'comment',
-          projectId,
-          fileId,
-          userName,
-          message: `${userName} đã bình luận trong "${fileName}"`,
-          adminEmail: projectData.adminEmail
-        }).catch(err => console.warn('Failed to create notification:', err))
-      }
+      // Cloud Functions will automatically create notifications and send emails
+      // when a comment is created, so we no longer need to do this client-side
 
       // Remove optimistic comment from state
       // The real comment will be added via the Firestore listener

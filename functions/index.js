@@ -421,3 +421,164 @@ exports.verifyAccessCode = functions.https.onCall(async (data, context) => {
 
   return { token: match.id };
 });
+
+/**
+ * Trigger: New Comment Created
+ * Creates in-app notification and sends email to admin
+ */
+exports.onCommentCreated = functions.firestore
+  .document('projects/{projectId}/comments/{commentId}')
+  .onCreate(async (snap, context) => {
+    const comment = snap.data();
+    const { projectId } = context.params;
+
+    try {
+      // Get project data for adminEmail and projectName
+      const projectDoc = await admin.firestore().doc(`projects/${projectId}`).get();
+      if (!projectDoc.exists) {
+        console.warn(`Project ${projectId} not found for comment notification`);
+        return null;
+      }
+      const projectData = projectDoc.data();
+
+      // Get file name
+      const fileDoc = await admin.firestore().doc(`projects/${projectId}/files/${comment.fileId}`).get();
+      const fileName = fileDoc.exists ? fileDoc.data().name : 'file';
+
+      const notificationData = {
+        type: 'comment',
+        projectId,
+        projectName: projectData.name,
+        fileId: comment.fileId,
+        fileName,
+        userName: comment.userName || 'Anonymous',
+        message: `${comment.userName || 'Anonymous'} đã bình luận trong "${fileName}"`,
+        isRead: false,
+        createdAt: admin.firestore.Timestamp.now(),
+        adminEmail: projectData.adminEmail ? String(projectData.adminEmail).toLowerCase() : null
+      };
+
+      // 1. Create in-app notification
+      await admin.firestore().collection('notifications').add(notificationData);
+      console.log('✅ Created in-app notification for comment');
+
+      // 2. Create email document (if adminEmail exists)
+      if (projectData.adminEmail) {
+        const projectLink = `https://review-system-b8883.web.app/admin/projects/${projectId}`;
+        await admin.firestore().collection('mail').add({
+          to: projectData.adminEmail,
+          message: {
+            subject: `[Review System] Bình luận mới: ${comment.userName || 'Anonymous'} trong ${projectData.name}`,
+            html: `
+              <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
+                <h2>Thông báo bình luận mới</h2>
+                <p><strong>Dự án:</strong> ${projectData.name}</p>
+                <p><strong>File:</strong> ${fileName}</p>
+                <p><strong>Người bình luận:</strong> ${comment.userName || 'Anonymous'}</p>
+                <hr />
+                <p style="background: #f4f4f4; padding: 15px; border-radius: 5px;">
+                  "${comment.content}"
+                </p>
+                <br />
+                <a href="${projectLink}" style="background: #007bff; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                  Xem chi tiết tại Dashboard
+                </a>
+                <p style="font-size: 12px; color: #777; margin-top: 20px;">
+                  Đây là thông báo tự động từ hệ thống Review System.
+                </p>
+              </div>
+            `
+          }
+        });
+        console.log('✅ Created email document for comment notification');
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Error creating comment notification:', error);
+      return null;
+    }
+  });
+
+/**
+ * Trigger: Comment Updated (Resolve)
+ * Creates notification when a comment is resolved
+ */
+exports.onCommentUpdated = functions.firestore
+  .document('projects/{projectId}/comments/{commentId}')
+  .onUpdate(async (change, context) => {
+    const newData = change.after.data();
+    const oldData = change.before.data();
+
+    // Only trigger on resolve status change
+    if (newData.isResolved && !oldData.isResolved) {
+      const { projectId } = context.params;
+
+      try {
+        const projectDoc = await admin.firestore().doc(`projects/${projectId}`).get();
+        if (!projectDoc.exists) return null;
+
+        const projectData = projectDoc.data();
+        const fileDoc = await admin.firestore().doc(`projects/${projectId}/files/${newData.fileId}`).get();
+        const fileName = fileDoc.exists ? fileDoc.data().name : 'file';
+
+        await admin.firestore().collection('notifications').add({
+          type: 'resolve',
+          projectId,
+          projectName: projectData.name,
+          fileId: newData.fileId,
+          fileName,
+          userName: null,
+          message: `Bình luận trong "${fileName}" đã được giải quyết`,
+          isRead: false,
+          createdAt: admin.firestore.Timestamp.now(),
+          adminEmail: projectData.adminEmail ? String(projectData.adminEmail).toLowerCase() : null
+        });
+
+        console.log('✅ Created resolve notification');
+        return null;
+      } catch (error) {
+        console.error('❌ Error creating resolve notification:', error);
+        return null;
+      }
+    }
+
+    return null;
+  });
+
+/**
+ * Trigger: New File Created
+ * Creates notification when a new file is uploaded
+ */
+exports.onFileCreated = functions.firestore
+  .document('projects/{projectId}/files/{fileId}')
+  .onCreate(async (snap, context) => {
+    const file = snap.data();
+    const { projectId, fileId } = context.params;
+
+    try {
+      const projectDoc = await admin.firestore().doc(`projects/${projectId}`).get();
+      if (!projectDoc.exists) return null;
+
+      const projectData = projectDoc.data();
+
+      await admin.firestore().collection('notifications').add({
+        type: 'upload',
+        projectId,
+        projectName: projectData.name,
+        fileId,
+        fileName: file.name,
+        userName: null,
+        message: `File mới "${file.name}" đã được tải lên`,
+        isRead: false,
+        createdAt: admin.firestore.Timestamp.now(),
+        adminEmail: projectData.adminEmail ? String(projectData.adminEmail).toLowerCase() : null
+      });
+
+      console.log('✅ Created upload notification for new file');
+      return null;
+    } catch (error) {
+      console.error('❌ Error creating upload notification:', error);
+      return null;
+    }
+  });

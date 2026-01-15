@@ -290,18 +290,8 @@ export const useFileStore = create<FileState>((set, get) => ({
         console.log('✅ New file created')
         toast.success(`Đã tải lên ${file.name}`)
 
-        // Create notification for new file upload
-        const projectDoc = await getDoc(doc(db, 'projects', projectId))
-        if (projectDoc.exists()) {
-          const projectData = projectDoc.data()
-          await createNotification({
-            type: 'upload',
-            projectId,
-            fileId,
-            message: `File mới "${newFileData.name}" đã được tải lên`,
-            adminEmail: projectData.adminEmail
-          })
-        }
+        // Cloud Functions will automatically create upload notifications
+        // via the onFileCreated trigger
       }
 
 
@@ -445,18 +435,8 @@ export const useFileStore = create<FileState>((set, get) => ({
 
         toast.success(`Đã tải lên sequence "${name}" với ${sequenceUrls.length} frames`)
 
-        // Create notification for new sequence upload
-        const projectDoc = await getDoc(doc(db, 'projects', projectId))
-        if (projectDoc.exists()) {
-          const projectData = projectDoc.data()
-          await createNotification({
-            type: 'upload',
-            projectId,
-            fileId,
-            message: `Image sequence "${name}" (${sequenceUrls.length} frames) đã được tải lên`,
-            adminEmail: projectData.adminEmail
-          })
-        }
+        // Cloud Functions will automatically create upload notifications
+        // via the onFileCreated trigger
       }
 
 

@@ -94,12 +94,9 @@ service cloud.firestore {
 
     // Notifications collection
     match /notifications/{notificationId} {
-      // Only authenticated users (system) can create notifications
-      allow create: if isAuthenticated() &&
-        request.resource.data.type is string &&
-        request.resource.data.message is string &&
-        request.resource.data.projectId is string &&
-        request.resource.data.createdAt == request.time;
+      // Cloud Functions create all notifications automatically
+      // Client-side creation is no longer needed or allowed
+      allow create: if false;
 
       // Admins can read/update their own notifications
       allow read, update: if isAuthenticated();
