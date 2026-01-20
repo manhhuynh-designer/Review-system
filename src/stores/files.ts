@@ -47,6 +47,16 @@ interface FileState {
   deleteSequenceFrames: (projectId: string, fileId: string, version: number, indicesToDelete: number[]) => Promise<void>
   deleteVersion: (projectId: string, fileId: string, version: number) => Promise<void>
   toggleFileLock: (projectId: string, fileId: string, isLocked: boolean) => Promise<void>
+  updateModelSettings: (projectId: string, fileId: string, version: number, settings: {
+    toneMapping?: string
+    exposure?: number
+    enablePostProcessing?: boolean
+    bloomIntensity?: number
+    envPreset?: string
+    envIntensity?: number
+    lightIntensity?: number
+    gamma?: number
+  }) => Promise<void>
   cleanupProjectFiles: (projectId: string) => Promise<void>
   cleanup: () => void
 }
@@ -1070,6 +1080,42 @@ export const useFileStore = create<FileState>((set, get) => ({
       throw error
     } finally {
       set({ deleting: false })
+    }
+  },
+
+  updateModelSettings: async (projectId: string, fileId: string, version: number, settings: {
+    toneMapping?: string
+    exposure?: number
+    enablePostProcessing?: boolean
+    bloomIntensity?: number
+    envPreset?: string
+    envIntensity?: number
+    lightIntensity?: number
+    gamma?: number
+  }) => {
+    try {
+      const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+      const fileDoc = await getDoc(fileRef)
+
+      if (!fileDoc.exists()) throw new Error('File not found')
+
+      const data = fileDoc.data() as FileModel
+      const versions = [...data.versions]
+      const versionIndex = versions.findIndex(v => v.version === version)
+
+      if (versionIndex >= 0) {
+        versions[versionIndex] = {
+          ...versions[versionIndex],
+          renderSettings: settings
+        }
+
+        await updateDoc(fileRef, { versions })
+        toast.success('Đã lưu cấu hình hiển thị 3D')
+      }
+    } catch (error: any) {
+      console.error('Error updating model settings:', error)
+      toast.error('Lỗi khi lưu cấu hình: ' + error.message)
+      throw error
     }
   },
 

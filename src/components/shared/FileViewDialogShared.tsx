@@ -64,6 +64,7 @@ import { AnnotationToolbar } from '@/components/annotations/AnnotationToolbar'
 import type { AnnotationObject } from '@/types'
 import type { GLBViewerRef } from '@/components/viewers/GLBViewer'
 import { useFileStore } from '@/stores/files'
+import { useAuthStore } from '@/stores/auth'
 import { useVideoComparison } from '@/hooks/useVideoComparison'
 import toast from 'react-hot-toast'
 
@@ -698,6 +699,22 @@ export function FileViewDialogShared({
       setAnnotationHistoryIndex(newIndex)
       setAnnotationData(annotationHistory[newIndex])
     }
+  }
+
+  // 3D Model Settings Handlers
+  const { user } = useAuthStore()
+  const isUserAdmin = (user as any)?.role === 'admin' || isAdmin
+
+  const handleSaveRenderSettings = async (settings: any) => {
+    if (!file) return
+
+    // Find version object if needed, but we pass version number to store
+    await useFileStore.getState().updateModelSettings(
+      file.projectId,
+      file.id,
+      currentVersion,
+      settings
+    )
   }
 
   // Handle Resize Logic
@@ -1377,6 +1394,9 @@ export function FileViewDialogShared({
               className="w-full h-full"
               initialCameraState={current?.cameraState}
               showMobileToolbar={true}
+              isAdmin={isUserAdmin}
+              initialRenderSettings={current?.renderSettings}
+              onSaveSettings={handleSaveRenderSettings}
             />
           </Suspense>
           {renderAnnotationOverlay()}

@@ -100,6 +100,17 @@ export interface FileVersion {
     duration?: number
   }
   validationStatus?: 'pending' | 'clean' | 'infected' | 'error'
+  // 3D Model Render Settings (Admin configured, applies to all viewers)
+  renderSettings?: {
+    toneMapping?: string // AgX, ACESFilmic, Reinhard, Cineon, Linear, NoToneMapping
+    exposure?: number
+    enablePostProcessing?: boolean
+    bloomIntensity?: number
+    envPreset?: string
+    envIntensity?: number
+    lightIntensity?: number
+    gamma?: number
+  }
 }
 
 export interface File {

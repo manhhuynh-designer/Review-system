@@ -653,10 +653,46 @@ export async function startFileTour({ fileType, isMobile }: TourOptions) {
           }
         },
         {
-          element: '#model-auto-rotate',
+          element: '#model-interaction-mode',
           popover: {
-            title: 'Tự động xoay',
-            description: 'Bật/tắt tự động xoay mô hình để xem mọi góc.',
+            title: 'Chế độ Tương tác',
+            description: 'Chuyển đổi giữa chế độ Xoay (Rotate) và Di chuyển (Pan).',
+            side: 'right',
+            align: 'center'
+          }
+        },
+        {
+          element: '#model-reset-view',
+          popover: {
+            title: 'Đặt lại góc nhìn',
+            description: 'Quay về vị trí camera mặc định.',
+            side: 'right',
+            align: 'center'
+          }
+        },
+        {
+          element: '#model-screenshot',
+          popover: {
+            title: 'Chụp ảnh',
+            description: 'Lưu ảnh chụp màn hình của góc nhìn hiện tại.',
+            side: 'right',
+            align: 'center'
+          }
+        },
+        {
+          element: '.glb-toolbar',
+          popover: {
+            title: 'Thanh công cụ Chính',
+            description: 'Chứa các công cụ điều khiển hiển thị, AR và Animation.',
+            side: 'top',
+            align: 'center'
+          }
+        },
+        {
+          element: '#model-ar-view',
+          popover: {
+            title: 'Xem AR',
+            description: 'Xem mô hình trong không gian thực tế (nếu thiết bị hỗ trợ).',
             side: 'top',
             align: 'center'
           }
@@ -665,16 +701,7 @@ export async function startFileTour({ fileType, isMobile }: TourOptions) {
           element: '#model-render-mode',
           popover: {
             title: 'Chế độ hiển thị',
-            description: 'Thay đổi giữa Standard, Wireframe hoặc Matcap để xem vật liệu và cấu trúc mô hình.',
-            side: 'top',
-            align: 'center'
-          }
-        },
-        {
-          element: '#model-camera-selector',
-          popover: {
-            title: 'Chọn camera (nếu có)',
-            description: 'Chọn camera định nghĩa trước trong file GLTF/GLB để nhảy tới góc nhìn đó.',
+            description: 'Thay đổi giữa Standard, Wireframe hoặc Matcap.',
             side: 'top',
             align: 'center'
           }
@@ -682,44 +709,8 @@ export async function startFileTour({ fileType, isMobile }: TourOptions) {
         {
           element: '#model-lighting',
           popover: {
-            title: 'Điều khiển ánh sáng',
-            description: 'Mở bảng điều chỉnh ánh sáng và môi trường để thay đổi cường độ và preset.',
-            side: 'top',
-            align: 'center'
-          }
-        },
-        {
-          element: '#model-bg-light',
-          popover: {
-            title: 'Nền sáng',
-            description: 'Chuyển nền sang sáng để kiểm tra ánh sáng và vật liệu.',
-            side: 'top',
-            align: 'center'
-          }
-        },
-        {
-          element: '#model-bg-dark',
-          popover: {
-            title: 'Nền tối',
-            description: 'Chuyển nền sang tối để kiểm tra phản xạ và độ tương phản.',
-            side: 'top',
-            align: 'center'
-          }
-        },
-        {
-          element: '#model-screenshot',
-          popover: {
-            title: 'Chụp ảnh',
-            description: 'Lưu ảnh PNG của khung nhìn hiện tại để dùng làm thumbnail hoặc tài liệu.',
-            side: 'top',
-            align: 'center'
-          }
-        },
-        {
-          element: '#model-reset',
-          popover: {
-            title: 'Đặt lại góc nhìn',
-            description: 'Phục hồi vị trí camera mặc định và trạng thái xoay.',
+            title: 'Cấu hình hiển thị',
+            description: 'Điều chỉnh ánh sáng, môi trường và Tone Mapping.',
             side: 'top',
             align: 'center'
           }
