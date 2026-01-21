@@ -61,8 +61,31 @@ const MATCAP_TEXTURES: Record<MatcapType, string> = {
 // Loading progress component inside Canvas
 function Loader() {
   const { progress, active } = useProgress()
+  const [visible, setVisible] = useState(false)
+  const [displayProgress, setDisplayProgress] = useState(0)
 
-  if (progress >= 100 || !active) return null
+  useEffect(() => {
+    let timeout: NodeJS.Timeout
+    if (active) {
+      setVisible(true)
+    } else {
+      // Delay hiding to bridge gaps between sequential loads (e.g., GLB -> Draco)
+      timeout = setTimeout(() => {
+        setVisible(false)
+        setDisplayProgress(0) // Reset only when fully hidden
+      }, 500)
+    }
+    return () => clearTimeout(timeout)
+  }, [active])
+
+  // Update display progress only if increasing (prevent 100% -> 0% glitches)
+  useEffect(() => {
+    if (visible && progress > displayProgress) {
+      setDisplayProgress(progress)
+    }
+  }, [progress, visible, displayProgress])
+
+  if (!visible) return null
 
   return (
     <Html center>
@@ -71,10 +94,10 @@ function Loader() {
         <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
           <div
             className="h-full bg-primary transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${displayProgress}%` }}
           />
         </div>
-        <div className="text-xs text-muted-foreground">{progress.toFixed(0)}%</div>
+        <div className="text-xs text-muted-foreground">{displayProgress.toFixed(0)}%</div>
       </div>
     </Html>
   )
