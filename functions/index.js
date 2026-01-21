@@ -476,16 +476,24 @@ exports.onCommentCreated = functions.firestore
         // If project doesn't have specific emails, check user settings
         const userSettingsDoc = await admin.firestore().doc(`userSettings/${projectData.adminEmail}`).get();
         let adminNotificationEmail = projectData.adminEmail;
+        let shouldSendToAdmin = true;
 
         if (userSettingsDoc.exists) {
           const userSettings = userSettingsDoc.data();
+
+          // Check if admin receives these notifications
           if (userSettings.defaultNotificationEmail) {
             adminNotificationEmail = userSettings.defaultNotificationEmail;
           }
+
+          // CHECK EMAIL SETTINGS
+          if (userSettings.emailSettings && userSettings.emailSettings.comment === false) {
+            shouldSendToAdmin = false;
+          }
         }
 
-        // Add if not already present
-        if (!recipientEmails.includes(adminNotificationEmail)) {
+        // Add if not already present and allowed
+        if (shouldSendToAdmin && !recipientEmails.includes(adminNotificationEmail)) {
           recipientEmails.push(adminNotificationEmail);
         }
       }
@@ -557,13 +565,14 @@ exports.onCommentUpdated = functions.firestore
         const fileDoc = await admin.firestore().doc(`projects/${projectId}/files/${newData.fileId}`).get();
         const fileName = fileDoc.exists ? fileDoc.data().name : 'file';
 
+        // 1. Internal Notification
         await admin.firestore().collection('notifications').add({
           type: 'resolve',
           projectId,
           projectName: projectData.name,
           fileId: newData.fileId,
           fileName,
-          userName: null,
+          userName: null, // Usually system or admin resolved
           message: `Bình luận trong "${fileName}" đã được giải quyết`,
           isRead: false,
           createdAt: admin.firestore.Timestamp.now(),
@@ -571,6 +580,53 @@ exports.onCommentUpdated = functions.firestore
         });
 
         console.log('✅ Created resolve notification');
+
+        // 2. Email Notification (Admin Only usually, or maybe comment author?)
+        // Design: Send to Admin if enabled.
+        if (projectData.adminEmail) {
+          const userSettingsDoc = await admin.firestore().doc(`userSettings/${projectData.adminEmail}`).get();
+          let adminNotificationEmail = projectData.adminEmail;
+          let shouldSendToAdmin = true;
+
+          if (userSettingsDoc.exists) {
+            const userSettings = userSettingsDoc.data();
+            if (userSettings.defaultNotificationEmail) {
+              adminNotificationEmail = userSettings.defaultNotificationEmail;
+            }
+            // CHECK EMAIL SETTINGS: resolve
+            if (userSettings.emailSettings && userSettings.emailSettings.resolve === false) {
+              shouldSendToAdmin = false;
+            }
+          }
+
+          if (shouldSendToAdmin) {
+            const baseUrl = `https://${process.env.GCLOUD_PROJECT}.web.app`;
+            // Use project ID for admin dashboard link
+            const projectLink = `${baseUrl}/admin/projects/${projectId}`;
+
+            const mailRef = admin.firestore().collection('mail').doc();
+            await mailRef.set({
+              to: [adminNotificationEmail],
+              message: {
+                subject: `[Review System] Bình luận đã được giải quyết: ${projectData.name}`,
+                html: `
+                   <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
+                     <h2>Bình luận đã được giải quyết</h2>
+                     <p><strong>Dự án:</strong> ${projectData.name}</p>
+                     <p><strong>File:</strong> ${fileName}</p>
+                     <p><strong>Nội dung bình luận:</strong> "${newData.content}"</p>
+                     <br />
+                     <a href="${projectLink}" style="background: #007bff; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                       Xem chi tiết
+                     </a>
+                   </div>
+                 `
+              }
+            });
+            console.log(`✅ Created email for resolved comment to ${adminNotificationEmail}`);
+          }
+        }
+
         return null;
       } catch (error) {
         console.error('❌ Error creating resolve notification:', error);
@@ -597,6 +653,7 @@ exports.onFileCreated = functions.firestore
 
       const projectData = projectDoc.data();
 
+      // 1. Internal Notification
       await admin.firestore().collection('notifications').add({
         type: 'upload',
         projectId,
@@ -612,7 +669,7 @@ exports.onFileCreated = functions.firestore
 
       console.log('✅ Created upload notification for new file');
 
-      // --- EMAIL NOTIFICATION LOGIC ---
+      // 2. Email Notification
       let recipientEmails = [];
       // 1. Project notification list (Subscribed guests) - Ensure it's an array
       if (Array.isArray(projectData.notificationEmails)) {
@@ -624,14 +681,20 @@ exports.onFileCreated = functions.firestore
         // Check user settings for admin
         const userSettingsDoc = await admin.firestore().doc(`userSettings/${projectData.adminEmail}`).get();
         let adminNotificationEmail = projectData.adminEmail;
+        let shouldSendToAdmin = true;
+
         if (userSettingsDoc.exists) {
           const userSettings = userSettingsDoc.data();
           if (userSettings.defaultNotificationEmail) {
             adminNotificationEmail = userSettings.defaultNotificationEmail;
           }
+          // CHECK EMAIL SETTINGS: upload
+          if (userSettings.emailSettings && userSettings.emailSettings.upload === false) {
+            shouldSendToAdmin = false;
+          }
         }
         // Add if not already present
-        if (!recipientEmails.includes(adminNotificationEmail)) {
+        if (shouldSendToAdmin && !recipientEmails.includes(adminNotificationEmail)) {
           recipientEmails.push(adminNotificationEmail);
         }
       }
@@ -710,13 +773,19 @@ exports.onFileUpdated = functions.firestore
         if (projectData.adminEmail) {
           const userSettingsDoc = await admin.firestore().doc(`userSettings/${projectData.adminEmail}`).get();
           let adminNotificationEmail = projectData.adminEmail;
+          let shouldSendToAdmin = true;
+
           if (userSettingsDoc.exists) {
             const userSettings = userSettingsDoc.data();
             if (userSettings.defaultNotificationEmail) {
               adminNotificationEmail = userSettings.defaultNotificationEmail;
             }
+            // CHECK EMAIL SETTINGS: version
+            if (userSettings.emailSettings && userSettings.emailSettings.version === false) {
+              shouldSendToAdmin = false;
+            }
           }
-          if (!recipientEmails.includes(adminNotificationEmail)) {
+          if (shouldSendToAdmin && !recipientEmails.includes(adminNotificationEmail)) {
             recipientEmails.push(adminNotificationEmail);
           }
         }
