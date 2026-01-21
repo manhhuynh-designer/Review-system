@@ -241,7 +241,7 @@ export function FileViewDialogShared({
   }, [open, file?.type])
 
   // File store for sequence frame operations
-  const { reorderSequenceFrames, deleteSequenceFrames, deleteVersion } = useFileStore()
+  const { reorderSequenceFrames, deleteSequenceFrames, addSequenceFrames, deleteVersion, uploading } = useFileStore()
 
   // Video comparison hook
   const videoComparison = useVideoComparison({
@@ -1155,6 +1155,10 @@ export function FileViewDialogShared({
             onDeleteFrames={async (indices) => {
               await deleteSequenceFrames(file.projectId, file.id, current.version, indices)
             }}
+            onAddFrames={async (files) => {
+              await addSequenceFrames(file.projectId, file.id, current.version, files)
+            }}
+            isUploading={uploading}
           />
         </div>
       )

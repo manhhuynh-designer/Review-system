@@ -145,7 +145,11 @@ export function FilesList({ projectId, sortBy = 'date', sortDirection = 'desc', 
   useEffect(() => {
     if (selectedFile && files) {
       const updatedFile = files.find(f => f.id === selectedFile.id)
-      if (updatedFile && (updatedFile.currentVersion !== selectedFile.currentVersion || updatedFile.name !== selectedFile.name)) {
+      if (updatedFile && (
+        updatedFile.currentVersion !== selectedFile.currentVersion ||
+        updatedFile.name !== selectedFile.name ||
+        updatedFile.updatedAt?.toMillis() !== selectedFile.updatedAt?.toMillis()
+      )) {
         setSelectedFile({ ...updatedFile })
       }
     }

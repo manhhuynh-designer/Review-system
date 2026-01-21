@@ -727,6 +727,36 @@ export default function ReviewPage() {
                 <span>•</span>
                 <span>{projectFiles.length} tệp tin</span>
               </div>
+
+              {!isArchived && project.archiveUrl && (
+                <div className="pt-2">
+                  <a
+                    href={project.archiveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 p-2 rounded-lg border bg-background/50 hover:bg-muted transition-colors group"
+                  >
+                    <img
+                      src={`https://www.google.com/s2/favicons?domain=${new URL(project.archiveUrl).hostname}&sz=32`}
+                      alt="Drive Icon"
+                      className="w-5 h-5"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                    <ExternalLink className="w-4 h-4 hidden" />
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                        {project.archiveTitle || 'Link lưu trữ dự án'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                        {new URL(project.archiveUrl).hostname}
+                      </span>
+                    </div>
+                  </a>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button

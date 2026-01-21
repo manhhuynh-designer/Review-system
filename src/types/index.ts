@@ -31,6 +31,7 @@ export interface Project {
   notificationEmails?: string[] // Emails to receive notifications (uses default if not set)
   // Archive fields
   archiveUrl?: string // External long-term storage link
+  archiveTitle?: string // Customize link title
   archivedAt?: Timestamp // When project was archived
   isDataCleared?: boolean // True if files were cleared (keeping thumbnails/comments)
   // Trash fields
@@ -122,6 +123,7 @@ export interface File {
   currentVersion: number
   sequenceViewMode?: 'video' | 'carousel' | 'grid' // Admin-set view mode for sequences
   createdAt: Timestamp
+  updatedAt?: Timestamp
   // Trash fields
   isTrashed?: boolean
   trashedAt?: Timestamp

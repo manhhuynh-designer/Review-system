@@ -45,6 +45,7 @@ interface FileState {
   renameFile: (projectId: string, fileId: string, newName: string) => Promise<void>
   reorderSequenceFrames: (projectId: string, fileId: string, version: number, newOrder: number[]) => Promise<void>
   deleteSequenceFrames: (projectId: string, fileId: string, version: number, indicesToDelete: number[]) => Promise<void>
+  addSequenceFrames: (projectId: string, fileId: string, version: number, files: File[]) => Promise<void>
   deleteVersion: (projectId: string, fileId: string, version: number) => Promise<void>
   toggleFileLock: (projectId: string, fileId: string, isLocked: boolean) => Promise<void>
   updateModelSettings: (projectId: string, fileId: string, version: number, settings: {
@@ -771,6 +772,9 @@ export const useFileStore = create<FileState>((set, get) => ({
         const oldUrls = currentVersion.sequenceUrls || []
         const oldCaptions = currentVersion.frameCaptions || {}
 
+        // Identify URLs to delete
+        const urlsToDelete = indicesToDelete.map(index => oldUrls[index]).filter(Boolean)
+
         // Filter out deleted frames
         const indicesToDeleteSet = new Set(indicesToDelete)
         const newUrls = oldUrls.filter((_, i) => !indicesToDeleteSet.has(i))
@@ -778,6 +782,18 @@ export const useFileStore = create<FileState>((set, get) => ({
         if (newUrls.length === 0) {
           throw new Error('Không thể xóa tất cả hình trong sequence')
         }
+
+        // Delete from Storage (fire and forget to not block UI)
+        urlsToDelete.forEach(url => {
+          try {
+            const fileRef = ref(storage, url)
+            deleteObject(fileRef).catch(err => {
+              console.warn('Failed to delete storage object:', err)
+            })
+          } catch (e) {
+            console.warn('Error creating ref for deletion:', e)
+          }
+        })
 
         // Rebuild captions with new indices
         const newCaptions: Record<number, string> = {}
@@ -791,21 +807,131 @@ export const useFileStore = create<FileState>((set, get) => ({
           }
         }
 
+        // Recalculate duration
+        const oldDuration = currentVersion.metadata?.duration || 0
+        const oldFrameCount = currentVersion.frameCount || oldUrls.length
+        const fps = oldDuration > 0 ? oldFrameCount / oldDuration : 24
+        const newDuration = newUrls.length / fps
+
         versions[versionIndex] = {
           ...currentVersion,
           sequenceUrls: newUrls,
           url: newUrls[0], // Update thumbnail to first frame
           frameCount: newUrls.length,
-          frameCaptions: newCaptions
+          frameCaptions: newCaptions,
+          metadata: {
+            ...currentVersion.metadata,
+            duration: newDuration,
+            lastModified: Date.now()
+          }
         }
 
-        await updateDoc(fileRef, { versions })
+        await updateDoc(fileRef, {
+          versions,
+          updatedAt: Timestamp.now()
+        })
         toast.success(`Đã xóa ${indicesToDelete.length} hình`)
       }
     } catch (error: any) {
       console.error('Failed to delete sequence frames:', error)
       toast.error('Lỗi xóa hình: ' + error.message)
       throw error
+    }
+  },
+
+  addSequenceFrames: async (projectId: string, fileId: string, version: number, files: File[]) => {
+    set({ uploading: true, uploadProgress: 0, error: null })
+    try {
+      const fileRef = doc(db, 'projects', projectId, 'files', fileId)
+      const fileDoc = await getDoc(fileRef)
+
+      if (!fileDoc.exists()) throw new Error('File not found')
+
+      const data = fileDoc.data() as FileModel
+      const versions = [...data.versions]
+      const versionIndex = versions.findIndex(v => v.version === version)
+
+      if (versionIndex >= 0 && versions[versionIndex].sequenceUrls) {
+        const currentVersion = versions[versionIndex]
+        const oldUrls = currentVersion.sequenceUrls || []
+
+        // Sort new files by name
+        const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name))
+
+        const newUrls: string[] = []
+        let uploadedCount = 0
+        const totalSize = sortedFiles.reduce((acc, file) => acc + file.size, 0)
+        let uploadedBytes = 0
+
+        // Upload new frames
+        for (let i = 0; i < sortedFiles.length; i++) {
+          const file = sortedFiles[i]
+          // Name format: continue from last index (e.g. 0005_name.jpg)
+          // We use currentCount + i to continue numbering
+          // However, to avoid conflicts if original files were not perfectly named,
+          // we might just append a unique ID or use a distinct prefix if needed.
+          // But to keep it simple and consistent with uploadSequence logic:
+          // We'll just generate a unique name to avoid overwriting existing files if naming restarts.
+          // Actually, let's use a timestamp prefix to ensure uniqueness + original name
+          const storagePath = `projects/${projectId}/${fileId}/v${version}/frames/added_${Date.now()}_${file.name}`
+
+          const storageRef = ref(storage, storagePath)
+          const uploadTask = uploadBytesResumable(storageRef, file)
+
+          await new Promise<void>((resolve, reject) => {
+            uploadTask.on('state_changed',
+              (snapshot) => {
+                const currentFileTransferred = snapshot.bytesTransferred
+                const progress = totalSize ? Math.round(((uploadedBytes + currentFileTransferred) / totalSize) * 100) : 0
+                set({ uploadProgress: progress })
+              },
+              (error) => reject(error),
+              async () => {
+                try {
+                  const url = await getDownloadURL(uploadTask.snapshot.ref)
+                  newUrls.push(url)
+                  uploadedBytes += file.size
+                  resolve()
+                } catch (e) {
+                  reject(e)
+                }
+              }
+            )
+          })
+          uploadedCount++
+        }
+
+        const updatedUrls = [...oldUrls, ...newUrls]
+
+        // Recalculate duration if needed (keep same FPS)
+        const currentDuration = currentVersion.metadata?.duration || 0
+        const oldFrameCount = currentVersion.frameCount || oldUrls.length
+        const fps = currentDuration > 0 ? oldFrameCount / currentDuration : 24
+        const newDuration = updatedUrls.length / fps
+
+        versions[versionIndex] = {
+          ...currentVersion,
+          sequenceUrls: updatedUrls,
+          frameCount: updatedUrls.length,
+          metadata: {
+            ...currentVersion.metadata,
+            duration: newDuration,
+            lastModified: Date.now()
+          }
+        }
+
+        await updateDoc(fileRef, {
+          versions,
+          updatedAt: Timestamp.now()
+        })
+        toast.success(`Đã thêm ${uploadedCount} frames`)
+      }
+    } catch (error: any) {
+      console.error('Failed to add sequence frames:', error)
+      toast.error('Lỗi thêm hình: ' + error.message)
+      throw error
+    } finally {
+      set({ uploading: false, uploadProgress: 0 })
     }
   },
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
-import { Play, Pause, SkipBack, SkipForward, Repeat, Film, Images, Grid3x3, Edit2, Check, X as XIcon, Maximize2, GripVertical, Trash2, Settings } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Repeat, Film, Images, Grid3x3, Edit2, Check, X as XIcon, Maximize2, GripVertical, Trash2, Settings, Plus, Loader2 } from 'lucide-react'
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -62,6 +62,8 @@ interface ImageSequenceViewerProps {
   // Grid edit mode callbacks (admin only)
   onReorderFrames?: (newOrder: number[]) => void
   onDeleteFrames?: (indices: number[]) => void
+  onAddFrames?: (files: File[]) => void
+  isUploading?: boolean
 }
 
 type ViewMode = 'video' | 'carousel' | 'grid'
@@ -96,7 +98,9 @@ export function ImageSequenceViewer({
   onFrameDetailView,
   // Grid edit mode callbacks
   onReorderFrames,
-  onDeleteFrames
+  onDeleteFrames,
+  onAddFrames,
+  isUploading = false
 }: ImageSequenceViewerProps) {
   const [currentFrame, setCurrentFrame] = useState(externalCurrentFrame !== undefined ? externalCurrentFrame : 0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -175,6 +179,22 @@ export function ImageSequenceViewer({
   const sequenceContainerRef = useRef<HTMLDivElement>(null)
   const sequenceRef = useRef<any>(null)
   const isSequenceReady = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleAddFramesClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      onAddFrames?.(Array.from(files))
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   // Sync with external currentFrame if provided
   useEffect(() => {
@@ -726,8 +746,38 @@ export function ImageSequenceViewer({
                   Xoá {selectedForDelete.size} hình
                 </Button>
               )}
+              {isEditMode && selectedForDelete.size === 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAddFramesClick}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Đang tải...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Thêm frames
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
+
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            multiple
+            accept="image/*"
+            onChange={handleFileChange}
+          />
 
           {/* Grid Layout with DnD */}
           {isEditMode && isAdmin ? (

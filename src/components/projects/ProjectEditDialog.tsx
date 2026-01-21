@@ -42,6 +42,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
   )
   const [tags, setTags] = useState(project.tags?.join(', ') || '')
   const [archiveUrl, setArchiveUrl] = useState(project.archiveUrl || '')
+  const [archiveTitle, setArchiveTitle] = useState(project.archiveTitle || '')
   const [notificationEmails, setNotificationEmails] = useState(project.notificationEmails?.join(', ') || '')
 
   const { updateProject, loading } = useProjectStore()
@@ -70,6 +71,7 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
         deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : undefined,
         tags: tags.trim() ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         archiveUrl: archiveUrl.trim() || undefined,
+        archiveTitle: archiveTitle.trim() || undefined,
         notificationEmails: notificationEmails.trim()
           ? notificationEmails.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
           : undefined
@@ -203,16 +205,26 @@ export function ProjectEditDialog({ project, triggerAsMenuItem = false }: Props)
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archiveUrl">Link lưu trữ <span className="text-xs text-muted-foreground">(Bắt buộc khi lưu trữ)</span></Label>
-              <div className="relative">
-                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="archiveUrl"
-                  value={archiveUrl}
-                  onChange={(e) => setArchiveUrl(e.target.value)}
-                  placeholder="https://drive.google.com/..."
-                  className="pl-9"
-                />
+              <Label htmlFor="archiveUrl">Link lưu trữ <span className="text-xs text-muted-foreground">(Hiển thị ở trang view client)</span></Label>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="archiveUrl"
+                    value={archiveUrl}
+                    onChange={(e) => setArchiveUrl(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                    className="pl-9"
+                  />
+                </div>
+                {archiveUrl && (
+                  <Input
+                    id="archiveTitle"
+                    value={archiveTitle}
+                    onChange={(e) => setArchiveTitle(e.target.value)}
+                    placeholder="Tiêu đề link (VD: Folder hoàn thiện, Drive dự án...)"
+                  />
+                )}
               </div>
             </div>
 
