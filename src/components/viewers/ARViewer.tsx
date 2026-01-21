@@ -1,5 +1,5 @@
 /// <reference path="../../global.d.ts" />
-import { forwardRef, useImperativeHandle, useRef, useEffect } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react'
 
 export interface ARViewerRef {
     activateAR: () => void
@@ -18,18 +18,24 @@ interface ARViewerProps {
  */
 export const ARViewer = forwardRef<ARViewerRef, ARViewerProps>(({ url, iosSrc, alt = "3D Model" }, ref) => {
     const modelViewerRef = useRef<HTMLElement>(null)
+    const [arUrl, setArUrl] = useState<string | undefined>(undefined)
 
     useImperativeHandle(ref, () => ({
         activateAR: () => {
-            if (modelViewerRef.current) {
-                // @ts-ignore - activateAR is a method on the custom element
-                modelViewerRef.current.activateAR()
-            }
+            // 1. Set the URL to trigger loading
+            setArUrl(url)
+
+            // 2. Wait for a tick to allow the element to update, then activate
+            setTimeout(() => {
+                if (modelViewerRef.current) {
+                    // @ts-ignore - activateAR is a method on the custom element
+                    modelViewerRef.current.activateAR()
+                }
+            }, 100)
         }
     }))
 
     // Register the custom element if it hasn't been registered yet
-    // Note: This is usually handled by the import '@google/model-viewer', but good to be aware
     useEffect(() => {
         import('@google/model-viewer').catch(console.error)
     }, [])
@@ -43,13 +49,16 @@ export const ARViewer = forwardRef<ARViewerRef, ARViewerProps>(({ url, iosSrc, a
             {/* @ts-ignore */}
             <model-viewer
                 ref={modelViewerRef}
-                src={url}
+                src={arUrl}
                 ios-src={iosSrc}
                 alt={alt}
                 ar
                 ar-modes="scene-viewer webxr quick-look"
                 camera-controls
                 ar-scale="auto"
+                shadow-intensity="0" // Disable shadows to save memory
+                environment-image="neutral" // Use basic lighting to save memory
+                loading="eager" // Load immediately once src is set (which is only on click now)
                 style={{ width: '1px', height: '1px' }}
             >
                 {/* @ts-ignore */}
