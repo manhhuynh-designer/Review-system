@@ -97,8 +97,8 @@ function Model({
   isPlaying?: boolean
   selectedAnimation?: string | null
 }) {
-  // Enable Draco for compressed meshes using local decoders for better production performance
-  const gltf = useGLTF(url, '/draco/')
+  // Enable Draco for compressed meshes (Using CDN for stability)
+  const gltf = useGLTF(url, true)
   const [matcapTexture] = useMatcapTexture(MATCAP_TEXTURES[matcapType], 256)
   const group = useRef<THREE.Group>(null)
 

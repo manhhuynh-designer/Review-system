@@ -63,7 +63,8 @@ export const ColorAdjustment = forwardRef<Effect, ColorAdjustmentProps>(
             effect.gamma = gamma
         }, [effect, gamma])
 
-        return <primitive ref={ref} object={effect} />
+        // Use effect directly in primitive
+        return <primitive object={effect} ref={ref} dispose={null} />
     }
 )
 
