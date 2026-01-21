@@ -2,11 +2,10 @@ import { useState, useRef, Suspense, forwardRef, useImperativeHandle, useLayoutE
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Environment, Html, useGLTF, Center, useMatcapTexture, useAnimations, useProgress } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
-import { Rotate3d, Box, Sun, Moon, RefreshCcw, Lightbulb, Camera, Circle, View, Film, Play, Pause, Hand, Move, Save } from 'lucide-react'
+import { Rotate3d, Box, Sun, Moon, RefreshCcw, Lightbulb, Camera, Circle, Film, Play, Pause, Hand, Move, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
-import { ARViewer } from './ARViewer'
-import type { ARViewerRef } from './ARViewer'
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -459,7 +458,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
   }, [])
 
   const internalRef = useRef<GLBViewerRef>(null)
-  const arViewerRef = useRef<ARViewerRef>(null)
+
 
   useImperativeHandle(ref, () => ({
     getCameraState: () => internalRef.current?.getCameraState() ?? null,
@@ -562,7 +561,8 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
         </Suspense>
       </Canvas >
 
-      <ARViewer ref={arViewerRef} url={url} />
+
+
 
       {/* NEW UI: Left Vertical Toolbar (View Interactions) */}
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 hidden sm:flex">
@@ -606,18 +606,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
       {/* Desktop Bottom Toolbar (Model Properties) */}
       <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex-col sm:flex-row items-center gap-2 sm:gap-1 ${showMobileToolbar ? 'hidden sm:flex' : 'flex'}`}>
         <div className="glb-toolbar flex items-center gap-1 p-1.5 rounded-full bg-background/90 backdrop-blur border shadow-lg transition-opacity opacity-0 group-hover:opacity-100">
-          <Button
-            id="model-ar-view"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full"
-            onClick={() => arViewerRef.current?.activateAR()}
-            title="Xem trong thực tế (AR)"
-          >
-            <View className="h-4 w-4" />
-          </Button>
 
-          <div className="w-px h-4 bg-border mx-1" />
 
           <Button
             id="model-auto-rotate"
@@ -902,15 +891,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
                 <Rotate3d className="h-4 w-4" />
               </Button>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 rounded-full"
-                onClick={() => arViewerRef.current?.activateAR()}
-                title="Xem AR"
-              >
-                <View className="h-4 w-4" />
-              </Button>
+
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
