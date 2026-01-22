@@ -100,6 +100,7 @@ export function UploadDialog({ projectId, existingFileId, existingFileType, trig
                 projectId={projectId}
                 existingFileId={existingFileId}
                 onUploadComplete={handleUploadComplete}
+                initialFiles={initialFiles}
               />
             ) : (
               <FileUploader

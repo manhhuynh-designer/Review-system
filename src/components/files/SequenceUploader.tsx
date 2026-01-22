@@ -10,10 +10,11 @@ import { Upload, X, Film, FolderOpen, AlertCircle } from 'lucide-react'
 interface SequenceUploaderProps {
   projectId: string
   existingFileId?: string
+  initialFiles?: File[]
   onUploadComplete?: () => void
 }
 
-export function SequenceUploader({ projectId, existingFileId, onUploadComplete }: SequenceUploaderProps) {
+export function SequenceUploader({ projectId, existingFileId, initialFiles, onUploadComplete }: SequenceUploaderProps) {
   const { uploadSequence, uploading, uploadProgress, files } = useFileStore()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -21,8 +22,27 @@ export function SequenceUploader({ projectId, existingFileId, onUploadComplete }
   const [fps, setFps] = useState(24)
   const [error, setError] = useState<string | null>(null)
 
-  // Pre-fill data if updating existing file
+  // Pre-fill data if updating existing file or if initialFiles provided
   useEffect(() => {
+    // Handle initialFiles drop
+    if (initialFiles && initialFiles.length > 0) {
+      // Validate all files are images
+      const invalidFiles = initialFiles.filter(f => !f.type.startsWith('image/'))
+      if (invalidFiles.length > 0) {
+        setError(`${invalidFiles.length} file(s) không phải là ảnh`)
+      } else {
+        // Sort by name for correct frame order
+        const sorted = [...initialFiles].sort((a, b) => a.name.localeCompare(b.name))
+        setSelectedFiles(sorted)
+
+        // Auto-generate name if needed
+        if (!sequenceName) {
+          const baseName = sorted[0].name.replace(/\d+\..*$/, '').replace(/[_-]$/, '')
+          setSequenceName(baseName || 'Image Sequence')
+        }
+      }
+    }
+
     if (existingFileId && files) {
       const existingFile = files.find(f => f.id === existingFileId)
       if (existingFile) {
@@ -36,7 +56,7 @@ export function SequenceUploader({ projectId, existingFileId, onUploadComplete }
         }
       }
     }
-  }, [existingFileId, files])
+  }, [existingFileId, files, initialFiles, sequenceName])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])

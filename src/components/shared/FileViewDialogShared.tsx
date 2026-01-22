@@ -305,8 +305,9 @@ export function FileViewDialogShared({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (!isAdmin) return // Only allow for admins
     if (!isDragOver) setIsDragOver(true)
-  }, [isDragOver])
+  }, [isDragOver, isAdmin])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -320,6 +321,8 @@ export function FileViewDialogShared({
     e.preventDefault()
     e.stopPropagation()
     setIsDragOver(false)
+
+    if (!isAdmin) return // Only allow for admins
 
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
