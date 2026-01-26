@@ -339,7 +339,7 @@ export function AnnotationCanvasKonva({
   const cursorClass = mode === 'read' ? 'cursor-default' : (tool === 'select' ? 'cursor-default' : (tool === 'pen' || tool === 'rect' || tool === 'arrow') ? 'cursor-crosshair' : (tool === 'eraser' ? 'cursor-pointer' : 'cursor-default'))
 
   return (
-    <div ref={containerRef} className={`absolute inset-0 w-full h-full ${mode === 'read' ? 'pointer-events-none' : ''}`}>
+    <div ref={containerRef} className={`absolute inset-0 w-full h-full z-50 ${mode === 'read' ? 'pointer-events-none' : 'pointer-events-auto'}`}>
       <Stage
         width={stageSize.w}
         height={stageSize.h}

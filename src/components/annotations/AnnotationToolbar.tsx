@@ -102,7 +102,7 @@ export function AnnotationToolbar({
             {/* Desktop: Draggable popup toolbar */}
             <div
                 ref={toolbarRef}
-                className="hidden sm:flex absolute bottom-4 left-1/2 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 flex-col gap-3 z-10 cursor-move select-none"
+                className="hidden sm:flex absolute bottom-4 left-1/2 bg-background/95 backdrop-blur-sm border rounded-lg shadow-lg p-3 flex-col gap-3 z-[100] cursor-move select-none"
                 style={{
                     transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`
                 }}

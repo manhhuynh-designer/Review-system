@@ -67,6 +67,8 @@ import { useFileStore } from '@/stores/files'
 import { useAuthStore } from '@/stores/auth'
 import { useVideoComparison } from '@/hooks/useVideoComparison'
 import toast from 'react-hot-toast'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { MobileFileViewLayout } from './mobile/MobileFileViewLayout'
 
 const GLBViewer = lazy(() => import('@/components/viewers/GLBViewer').then(m => ({ default: m.GLBViewer })))
 
@@ -208,6 +210,9 @@ export function FileViewDialogShared({
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [droppedFiles, setDroppedFiles] = useState<File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+
+  // Mobile detection
+  const isMobile = useIsMobile()
 
   const resizingState = useRef({ startX: 0, startWidth: 350 })
 
@@ -828,22 +833,7 @@ export function FileViewDialogShared({
           strokeWidth={annotationStrokeWidth}
           onChange={(data) => !isReadOnly && handleAnnotationChange(data)}
         />
-        {!isReadOnly && (
-          <AnnotationToolbar
-            tool={annotationTool}
-            onToolChange={setAnnotationTool}
-            color={annotationColor}
-            onColorChange={setAnnotationColor}
-            strokeWidth={annotationStrokeWidth}
-            onStrokeWidthChange={setAnnotationStrokeWidth}
-            onUndo={handleAnnotationUndo}
-            onRedo={handleAnnotationRedo}
-            onClear={handleClearAnnotations}
-            onDone={handleDoneAnnotating}
-            canUndo={annotationHistoryIndex > 0}
-            canRedo={annotationHistoryIndex < annotationHistory.length - 1}
-          />
-        )}
+
       </>
     )
   }
@@ -1155,7 +1145,7 @@ export function FileViewDialogShared({
             className="origin-center cursor-grab active:cursor-grabbing w-full h-full flex items-center justify-center"
             ref={(el) => {
               if (!el) return
-              const pe = zoom > 1 ? 'auto' : 'none'
+              const pe = (zoom > 1 || isAnnotating) ? 'auto' : 'none'
               el.style.pointerEvents = pe
               el.style.transform = `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`
             }}
@@ -1571,449 +1561,640 @@ export function FileViewDialogShared({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
-          className="max-w-[100vw] sm:max-w-[98vw] w-full h-[100vh] sm:h-[98vh] xl:h-[95vh] 2xl:h-[90vh] flex flex-col p-0 gap-0 [&>button]:hidden outline-none"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 flex flex-row items-center justify-between space-y-0 group">
-            {/* LEFT: File Info */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-4">
-              <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg shrink-0">
-                {getFileTypeIcon(file.type)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2 truncate">
-                  {isRenaming ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <Input
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        className="h-8 text-lg font-semibold"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
+      {/* Mobile Layout - Fullscreen Toggle View */}
+      {isMobile && open && (
+        <MobileFileViewLayout
+          file={file}
+          current={current}
+          effectiveUrl={effectiveUrl}
+          renderFilePreview={renderFilePreview}
+          comments={fileComments}
+          currentUserName={currentUserName}
+          onUserNameChange={onUserNameChange}
+          onAddComment={async (userName, content, timestamp, parentCommentId, annotationDataStr, attachments) => {
+            // Handle annotation data serialization with camera state for 3D
+            const hasData = annotationData && annotationData.length > 0
+            const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+              konva: annotationData,
+              camera: glbViewerRef.current?.getCameraState()
+            }) : annotationDataStr
+
+            await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+
+            // Clear annotation after successful submit
+            if (hasData && !isReadOnly) {
+              setAnnotationData(null)
+              setIsAnnotating(false)
+            }
+          }}
+          onResolveToggle={onResolveToggle}
+          onEditComment={onEditComment}
+          onDeleteComment={onDeleteComment}
+          onTimestampClick={handleTimestampClick}
+          onViewAnnotation={handleViewAnnotation}
+          isAdmin={isAdmin}
+          isLocked={file.isCommentsLocked || project?.isCommentsLocked || isArchived}
+          viewAllVersions={viewAllVersions}
+          onViewAllVersionsChange={setViewAllVersions}
+          currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+          showTimestamp={file.type === 'video' || file.type === 'sequence'}
+          // Annotation props
+          isAnnotating={isAnnotating}
+          isReadOnly={isReadOnly}
+          annotationData={annotationData}
+          annotationTool={annotationTool}
+          annotationColor={annotationColor}
+          annotationStrokeWidth={annotationStrokeWidth}
+          onAnnotationClick={handleStartAnnotating}
+          onAnnotationToolChange={setAnnotationTool}
+          onAnnotationColorChange={setAnnotationColor}
+          onAnnotationStrokeWidthChange={setAnnotationStrokeWidth}
+          onAnnotationUndo={handleAnnotationUndo}
+          onAnnotationRedo={handleAnnotationRedo}
+          onAnnotationClear={handleClearAnnotations}
+          onAnnotationDone={handleDoneAnnotating}
+          canUndoAnnotation={annotationHistoryIndex > 0}
+          canRedoAnnotation={annotationHistoryIndex < annotationHistory.length - 1}
+          // Actions
+          onClose={() => onOpenChange(false)}
+          onDownload={handleDownload}
+          onShare={copyShareLink}
+          uniqueVersions={uniqueVersions}
+          currentVersion={currentVersion}
+          onSwitchVersion={onSwitchVersion}
+        />
+      )}
+
+      {/* Desktop Layout - Original Dialog */}
+      {!isMobile && (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent
+            className="max-w-[100vw] sm:max-w-[98vw] w-full h-[100vh] sm:h-[98vh] xl:h-[95vh] 2xl:h-[90vh] flex flex-col p-0 gap-0 [&>button]:hidden outline-none"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 flex flex-row items-center justify-between space-y-0 group">
+              {/* LEFT: File Info */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-4">
+                <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg shrink-0">
+                  {getFileTypeIcon(file.type)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <DialogTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2 truncate">
+                    {isRenaming ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          className="h-8 text-lg font-semibold"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (renameValue.trim() && onRenameFile) {
+                                onRenameFile(file.id, renameValue.trim())
+                                setIsRenaming(false)
+                              }
+                            } else if (e.key === 'Escape') {
+                              setIsRenaming(false)
+                            }
+                          }}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => {
                             if (renameValue.trim() && onRenameFile) {
                               onRenameFile(file.id, renameValue.trim())
                               setIsRenaming(false)
                             }
-                          } else if (e.key === 'Escape') {
-                            setIsRenaming(false)
-                          }
-                        }}
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => {
-                          if (renameValue.trim() && onRenameFile) {
-                            onRenameFile(file.id, renameValue.trim())
-                            setIsRenaming(false)
-                          }
-                        }}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => setIsRenaming(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="truncate">{file.name}</span>
-                      {isAdmin && onRenameFile && (
+                          }}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-6 w-6 shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            setRenameValue(file.name)
-                            setIsRenaming(true)
-                          }}
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => setIsRenaming(false)}
                         >
-                          <Pencil className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </Button>
-                      )}
-                    </>
-                  )}
-
-                  {/* Version dropdown inline with title */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        id="header-version-dropdown"
-                        variant="outline"
-                        size="sm"
-                        className="gap-1 px-2 min-w-[3.5rem] ml-2"
-                        title="Lịch sử phiên bản"
-                      >
-                        <span className="font-medium text-xs">v{currentVersion}</span>
-                        <ChevronDown className="w-3 h-3 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-80">
-                      <div className="p-2 border-b mb-1">
-                        <div className="font-semibold text-sm">Lịch sử phiên bản</div>
                       </div>
-                      <div className="max-h-[300px] overflow-y-auto">
-                        {uniqueVersions
-                          .map((version: any) => (
-                            <DropdownMenuItem
-                              key={version.version}
-                              className="flex items-center justify-between p-3 cursor-pointer"
-                              onClick={() => {
-                                setCurrentVersion(version.version)
-                                onSwitchVersion?.(file.id, version.version)
-                              }}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${version.version === currentVersion
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted text-muted-foreground'
-                                  }`}>
-                                  v{version.version}
-                                </div>
-                                <div>
-                                  <div className="font-medium">
-                                    {version.version === currentVersion ? 'Phiên bản hiện tại' : `Phiên bản ${version.version}`}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {format(version.uploadedAt?.toDate ? version.uploadedAt.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
-                                  </div>
-                                </div>
-                              </div>
-                              {isAdmin && file.versions.length > 1 && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (confirm(`Xóa phiên bản ${version.version}?`)) {
-                                      deleteVersion(_projectId, file.id, version.version)
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              )}
-                            </DropdownMenuItem>
-                          ))}
-                      </div>
+                    ) : (
+                      <>
+                        <span className="truncate">{file.name}</span>
+                        {isAdmin && onRenameFile && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                            onClick={() => {
+                              setRenameValue(file.name)
+                              setIsRenaming(true)
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </>
+                    )}
 
-                      {onUploadNewVersion && (
-                        <>
-                          <div className="h-px bg-border my-1" />
-                          <div className="p-2">
-                            <DropdownMenuItem
-                              className="w-full justify-start cursor-pointer"
-                              onSelect={(e) => {
-                                e.preventDefault()
-                                setShowUploadDialog(true)
-                              }}
-                            >
-                              <Upload className="w-4 h-4 mr-2" />
-                              Tải lên phiên bản mới
-                            </DropdownMenuItem>
-                          </div>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </DialogTitle>
-                <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mt-1 flex-wrap">
-                  <span>{getFileTypeLabel(file.type)}</span>
-                  <span className="hidden sm:inline">•</span>
-                  <span className="hidden sm:inline">{formatFileSize(current.metadata.size)}</span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {format(uploadDate, 'dd/MM/yyyy HH:mm')}
-                  </span>
+                    {/* Version dropdown inline with title */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="header-version-dropdown"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 px-2 min-w-[3.5rem] ml-2"
+                          title="Lịch sử phiên bản"
+                        >
+                          <span className="font-medium text-xs">v{currentVersion}</span>
+                          <ChevronDown className="w-3 h-3 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-80">
+                        <div className="p-2 border-b mb-1">
+                          <div className="font-semibold text-sm">Lịch sử phiên bản</div>
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto">
+                          {uniqueVersions
+                            .map((version: any) => (
+                              <DropdownMenuItem
+                                key={version.version}
+                                className="flex items-center justify-between p-3 cursor-pointer"
+                                onClick={() => {
+                                  setCurrentVersion(version.version)
+                                  onSwitchVersion?.(file.id, version.version)
+                                }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${version.version === currentVersion
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted text-muted-foreground'
+                                    }`}>
+                                    v{version.version}
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">
+                                      {version.version === currentVersion ? 'Phiên bản hiện tại' : `Phiên bản ${version.version}`}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {format(version.uploadedAt?.toDate ? version.uploadedAt.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
+                                    </div>
+                                  </div>
+                                </div>
+                                {isAdmin && file.versions.length > 1 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (confirm(`Xóa phiên bản ${version.version}?`)) {
+                                        deleteVersion(_projectId, file.id, version.version)
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                )}
+                              </DropdownMenuItem>
+                            ))}
+                        </div>
+
+                        {onUploadNewVersion && (
+                          <>
+                            <div className="h-px bg-border my-1" />
+                            <div className="p-2">
+                              <DropdownMenuItem
+                                className="w-full justify-start cursor-pointer"
+                                onSelect={(e) => {
+                                  e.preventDefault()
+                                  setShowUploadDialog(true)
+                                }}
+                              >
+                                <Upload className="w-4 h-4 mr-2" />
+                                Tải lên phiên bản mới
+                              </DropdownMenuItem>
+                            </div>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </DialogTitle>
+                  <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mt-1 flex-wrap">
+                    <span>{getFileTypeLabel(file.type)}</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="hidden sm:inline">{formatFileSize(current.metadata.size)}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {format(uploadDate, 'dd/MM/yyyy HH:mm')}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* RIGHT: Actions Toolbar */}
-            <div className="flex items-center gap-1 sm:gap-2">
+              {/* RIGHT: Actions Toolbar */}
+              <div className="flex items-center gap-1 sm:gap-2">
 
-              {/* LEFT SIDE: Tour | Share | Download | Comments */}
-              {/* Tour Button - Desktop */}
-              <Button
-                id="header-tour-btn"
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 px-0 hidden sm:flex"
-                onClick={handleStartTour}
-                title="Hướng dẫn sử dụng"
-              >
-                <HelpCircle className="w-4 h-4" />
-                <span className="sr-only">Hướng dẫn</span>
-              </Button>
-
-              {/* Video Compare Button - Desktop */}
-              {file.type === 'video' && file.versions.length > 1 && (
+                {/* LEFT SIDE: Tour | Share | Download | Comments */}
+                {/* Tour Button - Desktop */}
                 <Button
-                  id="header-video-compare-btn"
-                  variant={videoComparison.isComparing ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-9 w-9 px-0 hidden sm:flex"
-                  onClick={videoComparison.toggleCompare}
-                  title={videoComparison.isComparing ? 'Tắt so sánh' : 'So sánh phiên bản'}
-                >
-                  <Columns className="w-4 h-4" />
-                  <span className="sr-only">So sánh phiên bản</span>
-                </Button>
-              )}
-
-              {/* Share & Download Group */}
-              <div id="header-share-download-group" className="flex items-center gap-1">
-                {/* Share Button (Icon-only) */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="header-share-btn"
-                      variant="ghost"
-                      size="sm"
-                      className="h-9 w-9 px-0 hidden sm:flex"
-                      title="Chia sẻ"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      <span className="sr-only">Chia sẻ</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="start">
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-sm">Chia sẻ file</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Bất kỳ ai có link đều có thể xem file này
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          readOnly
-                          value={getShareLink()}
-                          className="text-xs h-8"
-                        />
-                        <Button size="sm" className="h-8 px-2" onClick={copyShareLink}>
-                          {copied ? (
-                            <Check className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <Copy className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Mobile Share Button (Icon only) */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-9 w-9 px-0 sm:hidden"
-                      title="Chia sẻ"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="end">
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-sm">Chia sẻ file</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Bất kỳ ai có link đều có thể xem file này
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          readOnly
-                          value={getShareLink()}
-                          className="text-xs h-8"
-                        />
-                        <Button size="sm" className="h-8 px-2" onClick={copyShareLink}>
-                          {copied ? (
-                            <Check className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <Copy className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Download Button */}
-                <Button
-                  id="header-download-btn"
+                  id="header-tour-btn"
                   variant="ghost"
                   size="sm"
-                  className="h-9 w-9 px-0"
-                  asChild
-                  title="Tải xuống"
+                  className="h-9 w-9 px-0 hidden sm:flex"
+                  onClick={handleStartTour}
+                  title="Hướng dẫn sử dụng"
                 >
-                  <a
-                    href={effectiveUrl}
-                    download={ensureFileExtension(file.name, effectiveUrl, current?.metadata?.type, file.type)}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={handleDownload}
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="sr-only">Hướng dẫn</span>
+                </Button>
+
+                {/* Video Compare Button - Desktop */}
+                {file.type === 'video' && file.versions.length > 1 && (
+                  <Button
+                    id="header-video-compare-btn"
+                    variant={videoComparison.isComparing ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-9 w-9 px-0 hidden sm:flex"
+                    onClick={videoComparison.toggleCompare}
+                    title={videoComparison.isComparing ? 'Tắt so sánh' : 'So sánh phiên bản'}
                   >
-                    <Download className="w-4 h-4" />
-                    <span className="sr-only">Tải xuống</span>
-                  </a>
+                    <Columns className="w-4 h-4" />
+                    <span className="sr-only">So sánh phiên bản</span>
+                  </Button>
+                )}
+
+                {/* Share & Download Group */}
+                <div id="header-share-download-group" className="flex items-center gap-1">
+                  {/* Share Button (Icon-only) */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="header-share-btn"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 px-0 hidden sm:flex"
+                        title="Chia sẻ"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span className="sr-only">Chia sẻ</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" align="start">
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <h4 className="font-medium text-sm">Chia sẻ file</h4>
+                          <p className="text-xs text-muted-foreground">
+                            Bất kỳ ai có link đều có thể xem file này
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            readOnly
+                            value={getShareLink()}
+                            className="text-xs h-8"
+                          />
+                          <Button size="sm" className="h-8 px-2" onClick={copyShareLink}>
+                            {copied ? (
+                              <Check className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Mobile Share Button (Icon only) */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 px-0 sm:hidden"
+                        title="Chia sẻ"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" align="end">
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <h4 className="font-medium text-sm">Chia sẻ file</h4>
+                          <p className="text-xs text-muted-foreground">
+                            Bất kỳ ai có link đều có thể xem file này
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            readOnly
+                            value={getShareLink()}
+                            className="text-xs h-8"
+                          />
+                          <Button size="sm" className="h-8 px-2" onClick={copyShareLink}>
+                            {copied ? (
+                              <Check className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Download Button */}
+                  <Button
+                    id="header-download-btn"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 px-0"
+                    asChild
+                    title="Tải xuống"
+                  >
+                    <a
+                      href={effectiveUrl}
+                      download={ensureFileExtension(file.name, effectiveUrl, current?.metadata?.type, file.type)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={handleDownload}
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="sr-only">Tải xuống</span>
+                    </a>
+                  </Button>
+                </div>
+
+                {/* Comments Toggle */}
+                <Button
+                  id="header-comments-toggle"
+                  variant={showComments ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setShowComments(!showComments)}
+                  className="h-9 w-9 px-0 hidden sm:flex"
+                  title={showComments ? 'Ẩn bình luận' : 'Hiện bình luận'}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span className="sr-only">Bình luận</span>
+                </Button>
+
+                <div className="flex-1" />
+
+                {/* RIGHT SIDE: Compare (images) + Close */}
+                {/* Compare Button (Images only) - before close */}
+                {file.type === 'image' && file.versions.length > 1 && (
+                  <Button
+                    id="header-compare-btn"
+                    variant={compareMode ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-9 w-9 px-0"
+                    onClick={() => setCompareMode(!compareMode)}
+                    title="So sánh phiên bản"
+                  >
+                    <Columns className="w-4 h-4" />
+                    <span className="sr-only">So sánh</span>
+                  </Button>
+                )}
+
+                <div className="w-px h-6 bg-border/50 mx-1" />
+
+                {/* Close Button */}
+                <Button
+                  id="header-close-btn"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 px-0 hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => onOpenChange(false)}
+                  title="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                  <span className="sr-only">Đóng</span>
                 </Button>
               </div>
+            </DialogHeader>
 
-              {/* Comments Toggle */}
-              <Button
-                id="header-comments-toggle"
-                variant={showComments ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setShowComments(!showComments)}
-                className="h-9 w-9 px-0 hidden sm:flex"
-                title={showComments ? 'Ẩn bình luận' : 'Hiện bình luận'}
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span className="sr-only">Bình luận</span>
-              </Button>
-
-              <div className="flex-1" />
-
-              {/* RIGHT SIDE: Compare (images) + Close */}
-              {/* Compare Button (Images only) - before close */}
-              {file.type === 'image' && file.versions.length > 1 && (
-                <Button
-                  id="header-compare-btn"
-                  variant={compareMode ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-9 w-9 px-0"
-                  onClick={() => setCompareMode(!compareMode)}
-                  title="So sánh phiên bản"
-                >
-                  <Columns className="w-4 h-4" />
-                  <span className="sr-only">So sánh</span>
-                </Button>
-              )}
-
-              <div className="w-px h-6 bg-border/50 mx-1" />
-
-              {/* Close Button */}
-              <Button
-                id="header-close-btn"
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 px-0 hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => onOpenChange(false)}
-                title="Đóng"
-              >
-                <X className="w-5 h-5" />
-                <span className="sr-only">Đóng</span>
-              </Button>
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
-            {/* Main Content Area */}
-            <div className={`flex-1 overflow-y-auto overflow-x-hidden bg-background/50 flex flex-col ${showComments && !isVideoFullscreen ? '' : ''}`}>
-              {/* Toolbar for Annotation */}
-              <div id="annotation-toolbar" className="p-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 gap-2">
-                <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto">
-                  {!isAnnotating ? (
-                    <Button onClick={handleStartAnnotating} variant="outline" size="sm" className="gap-2 flex-1 sm:flex-initial">
-                      <div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-600" />
-                      Thêm ghi chú
-                    </Button>
-                  ) : isReadOnly ? (
-                    <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-                      <div className="text-sm font-medium text-muted-foreground">
-                        Đang xem ghi chú
-                      </div>
-                      <Button onClick={handleDoneAnnotating} variant="ghost" size="sm" className="h-7 px-2 hover:bg-destructive/10 hover:text-destructive">
-                        Đóng
+            <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+              {/* Main Content Area */}
+              <div className={`flex-1 overflow-y-auto overflow-x-hidden bg-background/50 flex flex-col ${showComments && !isVideoFullscreen ? '' : ''}`}>
+                {/* Toolbar for Annotation */}
+                <div id="annotation-toolbar" className="p-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 gap-2">
+                  <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto">
+                    {!isAnnotating ? (
+                      <Button onClick={handleStartAnnotating} variant="outline" size="sm" className="gap-2 flex-1 sm:flex-initial">
+                        <div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-600" />
+                        Thêm ghi chú
                       </Button>
-                    </div>
-                  ) : (
-                    <div className="text-sm font-medium text-muted-foreground animate-pulse">
-                      Đang vẽ ghi chú...
+                    ) : isReadOnly ? (
+                      <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+                        <div className="text-sm font-medium text-muted-foreground">
+                          Đang xem ghi chú
+                        </div>
+                        <Button onClick={handleDoneAnnotating} variant="ghost" size="sm" className="h-7 px-2 hover:bg-destructive/10 hover:text-destructive">
+                          Đóng
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="text-sm font-medium text-muted-foreground animate-pulse">
+                        Đang vẽ ghi chú...
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Filter Toggle - Desktop only */}
+                  {(file.type === 'video' || file.type === 'sequence') && (
+                    <div className="hidden sm:flex items-center gap-2">
+                      <Button
+                        variant={showOnlyCurrentTimeComments ? 'secondary' : 'ghost'}
+                        size="sm"
+                        id="filter-time-toggle"
+                        onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
+                        className={`${showOnlyCurrentTimeComments ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''}`}
+                        title="Chỉ hiện bình luận tại thời điểm này"
+                      >
+                        <Filter className="w-4 h-4 mr-2" />
+                        {showOnlyCurrentTimeComments ? 'Đang lọc theo thời gian' : 'Lọc theo thời gian'}
+                      </Button>
                     </div>
                   )}
                 </div>
 
-                {/* Filter Toggle - Desktop only */}
-                {(file.type === 'video' || file.type === 'sequence') && (
-                  <div className="hidden sm:flex items-center gap-2">
-                    <Button
-                      variant={showOnlyCurrentTimeComments ? 'secondary' : 'ghost'}
-                      size="sm"
-                      id="filter-time-toggle"
-                      onClick={() => setShowOnlyCurrentTimeComments(!showOnlyCurrentTimeComments)}
-                      className={`${showOnlyCurrentTimeComments ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''}`}
-                      title="Chỉ hiện bình luận tại thời điểm này"
-                    >
-                      <Filter className="w-4 h-4 mr-2" />
-                      {showOnlyCurrentTimeComments ? 'Đang lọc theo thời gian' : 'Lọc theo thời gian'}
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* File Preview */}
-              <div id="preview-container" className="flex-1 p-0 sm:p-2 flex items-center justify-center min-h-0 overflow-x-hidden overflow-y-visible sm:overflow-hidden">
-                {renderFilePreview()}
-              </div>
-            </div>
-
-            {showComments && !isVideoFullscreen && (
-              <div className="contents">
-                {/* Resize Handle */}
-                <div
-                  id="comments-resize-handle"
-                  className="hidden sm:flex w-4 -mr-2 -ml-2 z-20 cursor-col-resize items-center justify-center hover:bg-accent/50 active:bg-accent transition-colors flex-shrink-0 relative group"
-                  onMouseDown={handleResizeStart}
-                >
-                  {/* Visual Indicator */}
-                  <div className="w-1 h-8 rounded-full bg-border group-hover:bg-primary transition-colors" />
+                {/* File Preview */}
+                <div id="preview-container" className="flex-1 p-0 sm:p-2 flex items-center justify-center min-h-0 overflow-x-hidden overflow-y-visible sm:overflow-hidden">
+                  {renderFilePreview()}
                 </div>
+              </div>
 
+              {showComments && !isVideoFullscreen && (
+                <div className="contents">
+                  {/* Resize Handle */}
+                  <div
+                    id="comments-resize-handle"
+                    className="hidden sm:flex w-4 -mr-2 -ml-2 z-20 cursor-col-resize items-center justify-center hover:bg-accent/50 active:bg-accent transition-colors flex-shrink-0 relative group"
+                    onMouseDown={handleResizeStart}
+                  >
+                    {/* Visual Indicator */}
+                    <div className="w-1 h-8 rounded-full bg-border group-hover:bg-primary transition-colors" />
+                  </div>
+
+                  <div
+                    id="comments-sidebar"
+                    className="w-full sm:w-[var(--comment-width)] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l h-[38vh] sm:h-auto sm:max-h-none transition-[width] duration-0"
+                    ref={(el) => {
+                      if (!el) return
+                      el.style.setProperty('--comment-width', `${commentWidth}px`)
+                    }}
+                  >
+                    <div className="p-3 border-b flex items-center justify-between bg-muted/10">
+                      <div className="text-sm font-medium">Bình luận</div>
+                      <Button
+                        id="comments-version-toggle"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewAllVersions(!viewAllVersions)}
+                        className={`h-7 px-2 text-xs gap-1.5 transition-all ${viewAllVersions
+                          ? 'bg-primary/10 text-primary border-primary/50 hover:bg-primary/20'
+                          : 'text-muted-foreground hover:text-foreground border-dashed hover:border-solid'
+                          }`}
+                        title={viewAllVersions ? 'Đang hiện tất cả bình luận' : 'Chỉ hiện bình luận phiên bản này'}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>{viewAllVersions ? 'Tất cả bình luận' : 'Phiên bản hiện tại'}</span>
+                      </Button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+                      <CommentsList
+                        comments={fileComments}
+                        currentUserName={currentUserName}
+                        onResolveToggle={onResolveToggle}
+                        onTimestampClick={handleTimestampClick}
+                        onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
+                        onReply={async (parentCommentId, userName, content) => {
+                          await onAddComment(userName, content, undefined, parentCommentId)
+                        }}
+                        isSequence={file.type === 'sequence'}
+                        isAdmin={isAdmin}
+                        onEdit={onEditComment}
+                        onDelete={onDeleteComment}
+                        isLocked={file.isCommentsLocked || project?.isCommentsLocked || isArchived}
+                        showVersionBadge={viewAllVersions}
+                      />
+                      {fileComments.length === 0 && (
+                        <div className="text-center text-muted-foreground py-8">
+                          Chưa có bình luận nào
+                          {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
+                          {viewAllVersions && <div className="text-xs mt-1">(Đã bật xem tất cả phiên bản)</div>}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Desktop: Always show comment input */}
+                    <div className="hidden sm:block p-4 border-t bg-background flex-shrink-0">
+                      {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
+                        <div className="text-center text-muted-foreground py-4 px-2 bg-muted/30 rounded-md">
+                          <div className="flex items-center justify-center gap-2 text-sm">
+                            <span>🔒</span>
+                            <span>
+                              {isArchived
+                                ? 'Dự án đã được lưu trữ. Không thể bình luận.'
+                                : 'Tính năng bình luận đang tạm khóa.'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <AddComment
+                          onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                            const hasData = annotationData && annotationData.length > 0
+                            const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                              konva: annotationData,
+                              camera: glbViewerRef.current?.getCameraState()
+                            }) : null
+
+                            await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+
+                            if (dataToSave) {
+                              setAnnotationData(null)
+                              setIsAnnotating(false)
+                            }
+                          }}
+                          userName={currentUserName}
+                          onUserNameChange={onUserNameChange}
+                          currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                          showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                          annotationData={!isReadOnly ? annotationData : null}
+                          onAnnotationClick={handleStartAnnotating}
+                        />
+                      )}
+                    </div>
+
+                    {/* Mobile: Comment Input (Always visible now, no toggle) */}
+                    <div id="mobile-add-comment" className="sm:hidden border-t bg-background flex-shrink-0 p-2">
+                      {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
+                        <div className="text-center text-muted-foreground py-3 px-2 bg-muted/30 rounded-md">
+                          <div className="flex items-center justify-center gap-2 text-xs">
+                            <span>🔒</span>
+                            <span>
+                              {isArchived
+                                ? 'Dự án đã lưu trữ. Không thể bình luận.'
+                                : 'Bình luận đang tạm khóa.'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <AddComment
+                          isMobile={true}
+                          onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                            const hasData = annotationData && annotationData.length > 0
+                            const dataToSave = hasData && !isReadOnly ? JSON.stringify({
+                              konva: annotationData,
+                              camera: glbViewerRef.current?.getCameraState()
+                            }) : null
+
+                            await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+
+                            if (dataToSave) {
+                              setAnnotationData(null)
+                              setIsAnnotating(false)
+                            }
+                          }}
+                          userName={currentUserName}
+                          onUserNameChange={onUserNameChange}
+                          currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
+                          showTimestamp={file.type === 'video' || file.type === 'sequence'}
+                          annotationData={!isReadOnly ? annotationData : null}
+                          onAnnotationClick={handleStartAnnotating}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comments Sidebar - Fullscreen Mode (Absolutely Positioned) */}
+              {showComments && isVideoFullscreen && (
                 <div
-                  id="comments-sidebar"
-                  className="w-full sm:w-[var(--comment-width)] flex-shrink-0 flex flex-col bg-background border-t sm:border-t-0 sm:border-l h-[38vh] sm:h-auto sm:max-h-none transition-[width] duration-0"
-                  ref={(el) => {
-                    if (!el) return
-                    el.style.setProperty('--comment-width', `${commentWidth}px`)
-                  }}
+                  className="fixed top-0 right-0 left-[75vw] w-[25vw] h-screen flex flex-col bg-background border-l border-border z-50"
                 >
                   <div className="p-3 border-b flex items-center justify-between bg-muted/10">
                     <div className="text-sm font-medium">Bình luận</div>
                     <Button
-                      id="comments-version-toggle"
-                      variant="outline"
+                      variant={viewAllVersions ? 'secondary' : 'ghost'}
                       size="sm"
                       onClick={() => setViewAllVersions(!viewAllVersions)}
-                      className={`h-7 px-2 text-xs gap-1.5 transition-all ${viewAllVersions
-                        ? 'bg-primary/10 text-primary border-primary/50 hover:bg-primary/20'
-                        : 'text-muted-foreground hover:text-foreground border-dashed hover:border-solid'
-                        }`}
-                      title={viewAllVersions ? 'Đang hiện tất cả bình luận' : 'Chỉ hiện bình luận phiên bản này'}
+                      className={`h-7 px-2 text-xs gap-1.5 ${viewAllVersions ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground'}`}
                     >
                       <Layers className="w-3.5 h-3.5" />
-                      <span>{viewAllVersions ? 'Tất cả bình luận' : 'Phiên bản hiện tại'}</span>
+                      <span>Tất cả phiên bản</span>
                     </Button>
                   </div>
-
-                  <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+                  <div className="flex-1 overflow-y-auto p-4">
                     <CommentsList
                       comments={fileComments}
                       currentUserName={currentUserName}
@@ -2034,74 +2215,31 @@ export function FileViewDialogShared({
                       <div className="text-center text-muted-foreground py-8">
                         Chưa có bình luận nào
                         {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
-                        {viewAllVersions && <div className="text-xs mt-1">(Đã bật xem tất cả phiên bản)</div>}
                       </div>
                     )}
                   </div>
-
-                  {/* Desktop: Always show comment input */}
-                  <div className="hidden sm:block p-4 border-t bg-background flex-shrink-0">
+                  <div className="p-4 border-t bg-background">
                     {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
                       <div className="text-center text-muted-foreground py-4 px-2 bg-muted/30 rounded-md">
                         <div className="flex items-center justify-center gap-2 text-sm">
                           <span>🔒</span>
                           <span>
                             {isArchived
-                              ? 'Dự án đã được lưu trữ. Không thể bình luận.'
+                              ? 'Dự án đã lưu trữ. Không thể bình luận.'
                               : 'Tính năng bình luận đang tạm khóa.'}
                           </span>
                         </div>
                       </div>
                     ) : (
                       <AddComment
-                        onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
+                        onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData) => {
                           const hasData = annotationData && annotationData.length > 0
                           const dataToSave = hasData && !isReadOnly ? JSON.stringify({
                             konva: annotationData,
                             camera: glbViewerRef.current?.getCameraState()
                           }) : null
 
-                          await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
-
-                          if (dataToSave) {
-                            setAnnotationData(null)
-                            setIsAnnotating(false)
-                          }
-                        }}
-                        userName={currentUserName}
-                        onUserNameChange={onUserNameChange}
-                        currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                        showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                        annotationData={!isReadOnly ? annotationData : null}
-                        onAnnotationClick={handleStartAnnotating}
-                      />
-                    )}
-                  </div>
-
-                  {/* Mobile: Comment Input (Always visible now, no toggle) */}
-                  <div id="mobile-add-comment" className="sm:hidden border-t bg-background flex-shrink-0 p-2">
-                    {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
-                      <div className="text-center text-muted-foreground py-3 px-2 bg-muted/30 rounded-md">
-                        <div className="flex items-center justify-center gap-2 text-xs">
-                          <span>🔒</span>
-                          <span>
-                            {isArchived
-                              ? 'Dự án đã lưu trữ. Không thể bình luận.'
-                              : 'Bình luận đang tạm khóa.'}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <AddComment
-                        isMobile={true}
-                        onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData, attachments) => {
-                          const hasData = annotationData && annotationData.length > 0
-                          const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                            konva: annotationData,
-                            camera: glbViewerRef.current?.getCameraState()
-                          }) : null
-
-                          await onAddComment(userName, content, timestamp, parentCommentId, dataToSave, attachments)
+                          await onAddComment(userName, content, timestamp, parentCommentId, dataToSave)
 
                           if (dataToSave) {
                             setAnnotationData(null)
@@ -2118,92 +2256,27 @@ export function FileViewDialogShared({
                     )}
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
+            {isAnnotating && !isReadOnly && (
+              <AnnotationToolbar
+                tool={annotationTool}
+                onToolChange={setAnnotationTool}
+                color={annotationColor}
+                onColorChange={setAnnotationColor}
+                strokeWidth={annotationStrokeWidth}
+                onStrokeWidthChange={setAnnotationStrokeWidth}
+                onUndo={handleAnnotationUndo}
+                onRedo={handleAnnotationRedo}
+                onClear={handleClearAnnotations}
+                onDone={handleDoneAnnotating}
+                canUndo={annotationHistoryIndex > 0}
+                canRedo={annotationHistoryIndex < annotationHistory.length - 1}
+              />
             )}
-
-            {/* Comments Sidebar - Fullscreen Mode (Absolutely Positioned) */}
-            {showComments && isVideoFullscreen && (
-              <div
-                className="fixed top-0 right-0 left-[75vw] w-[25vw] h-screen flex flex-col bg-background border-l border-border z-50"
-              >
-                <div className="p-3 border-b flex items-center justify-between bg-muted/10">
-                  <div className="text-sm font-medium">Bình luận</div>
-                  <Button
-                    variant={viewAllVersions ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewAllVersions(!viewAllVersions)}
-                    className={`h-7 px-2 text-xs gap-1.5 ${viewAllVersions ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground'}`}
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>Tất cả phiên bản</span>
-                  </Button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4">
-                  <CommentsList
-                    comments={fileComments}
-                    currentUserName={currentUserName}
-                    onResolveToggle={onResolveToggle}
-                    onTimestampClick={handleTimestampClick}
-                    onViewAnnotation={(data, comment) => handleViewAnnotation(data, comment)}
-                    onReply={async (parentCommentId, userName, content) => {
-                      await onAddComment(userName, content, undefined, parentCommentId)
-                    }}
-                    isSequence={file.type === 'sequence'}
-                    isAdmin={isAdmin}
-                    onEdit={onEditComment}
-                    onDelete={onDeleteComment}
-                    isLocked={file.isCommentsLocked || project?.isCommentsLocked || isArchived}
-                    showVersionBadge={viewAllVersions}
-                  />
-                  {fileComments.length === 0 && (
-                    <div className="text-center text-muted-foreground py-8">
-                      Chưa có bình luận nào
-                      {showOnlyCurrentTimeComments && <div className="text-xs mt-1">(Đang lọc theo thời gian hiện tại)</div>}
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 border-t bg-background">
-                  {(file.isCommentsLocked || project?.isCommentsLocked || isArchived) ? (
-                    <div className="text-center text-muted-foreground py-4 px-2 bg-muted/30 rounded-md">
-                      <div className="flex items-center justify-center gap-2 text-sm">
-                        <span>🔒</span>
-                        <span>
-                          {isArchived
-                            ? 'Dự án đã lưu trữ. Không thể bình luận.'
-                            : 'Tính năng bình luận đang tạm khóa.'}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <AddComment
-                      onSubmit={async (userName, content, timestamp, parentCommentId, _ignoredAnnotationData) => {
-                        const hasData = annotationData && annotationData.length > 0
-                        const dataToSave = hasData && !isReadOnly ? JSON.stringify({
-                          konva: annotationData,
-                          camera: glbViewerRef.current?.getCameraState()
-                        }) : null
-
-                        await onAddComment(userName, content, timestamp, parentCommentId, dataToSave)
-
-                        if (dataToSave) {
-                          setAnnotationData(null)
-                          setIsAnnotating(false)
-                        }
-                      }}
-                      userName={currentUserName}
-                      onUserNameChange={onUserNameChange}
-                      currentTimestamp={file.type === 'video' ? currentTime : (file.type === 'sequence' ? currentFrame : undefined)}
-                      showTimestamp={file.type === 'video' || file.type === 'sequence'}
-                      annotationData={!isReadOnly ? annotationData : null}
-                      onAnnotationClick={handleStartAnnotating}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog >
+          </DialogContent>
+        </Dialog >
+      )}
 
       {/* Frame Detail Dialog - For viewing individual frames from sequence grid */}
       {
