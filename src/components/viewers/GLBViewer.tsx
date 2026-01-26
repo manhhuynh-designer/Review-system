@@ -2,7 +2,8 @@ import { useState, useRef, Suspense, forwardRef, useImperativeHandle, useLayoutE
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Environment, Html, useGLTF, Center, useMatcapTexture, useAnimations, useProgress } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
-import { Rotate3d, Box, Sun, Moon, RefreshCcw, Lightbulb, Camera, Circle, Film, Play, Pause, Hand, Move, Save } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { Rotate3d, Box, Sun, Moon, RefreshCcw, Lightbulb, Camera, Circle, Film, Play, Pause, Hand, Move, Save, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
 
@@ -335,7 +336,7 @@ const SceneContent = forwardRef<GLBViewerRef, {
         return gl.domElement.toDataURL('image/png')
       } catch (e) {
         console.error('Failed to capture screenshot', e)
-        return null
+        throw e
       }
     }
   }))
@@ -436,6 +437,7 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
 
   // Interaction State
   const [interactionMode, setInteractionMode] = useState<'rotate' | 'pan'>('rotate')
+  const [isExpanded, setIsExpanded] = useState(true)
 
   // Close dropdowns on window resize for better responsive behavior
   useEffect(() => {
@@ -490,15 +492,110 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
     if (animations.length > 0) setSelectedAnimation(animations[0])
   }
 
-  const handleScreenshot = () => {
-    const dataUrl = internalRef.current?.captureScreenshot()
-    if (dataUrl) {
-      const link = document.createElement('a')
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      link.download = `3d-view-${timestamp}.png`
-      link.href = dataUrl
-      link.click()
+  const handleScreenshot = async () => {
+    let dataUrl: string | null = null
+
+    try {
+      dataUrl = internalRef.current?.captureScreenshot() ?? null
+    } catch (e) {
+      console.error(e)
+      toast.error('Lỗi khi truy cập ngữ cảnh WebGL (CORS/Tainted).')
+      return
     }
+
+    if (!dataUrl) {
+      toast.error('Không thể chụp ảnh. Vui lòng thử lại.')
+      return
+    }
+
+    toast.promise(
+      (async () => {
+        // 1. Composite background if not transparent
+        let finalDataUrl = dataUrl
+        if (bgMode !== 'transparent') {
+          try {
+            finalDataUrl = await new Promise<string>((resolve, reject) => {
+              const img = new Image()
+              img.onload = () => {
+                const canvas = document.createElement('canvas')
+                canvas.width = img.width
+                canvas.height = img.height
+                const ctx = canvas.getContext('2d')
+                if (!ctx) return resolve(dataUrl!)
+
+                // Fill background
+                if (bgMode === 'dark') ctx.fillStyle = '#0a0a0a' // neutral-950
+                else if (bgMode === 'light') ctx.fillStyle = '#f5f5f5' // neutral-100
+                ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+                // Draw model
+                ctx.drawImage(img, 0, 0)
+                resolve(canvas.toDataURL('image/png'))
+              }
+              img.onerror = reject
+              img.src = dataUrl!
+            })
+          } catch (e) {
+            console.warn('Background composite failed', e)
+          }
+        }
+
+        // 2. Prepare Blob for interactions
+        const res = await fetch(finalDataUrl!)
+        const blob = await res.blob()
+        const file = new File([blob], `3d-view-${new Date().getTime()}.png`, { type: 'image/png' })
+
+        // 3. Mobile: Share Sheet
+        const isMobileDevice = typeof window !== 'undefined' && (window.devicePixelRatio > 1 || window.innerWidth < 768)
+
+        if (isMobileDevice && navigator.share) {
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: '3D View Screenshot',
+              })
+              return 'Đã mở chia sẻ ảnh'
+            } catch (err) {
+              if ((err as Error).name === 'AbortError') throw new Error('Đã hủy chia sẻ')
+            }
+          }
+        }
+
+        // 4. Desktop: Clipboard + Download
+        const results = []
+
+        // Try Copy to Clipboard
+        try {
+          if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                [blob.type]: blob
+              })
+            ])
+            results.push('đã sao chép')
+          }
+        } catch (err) {
+          console.warn('Clipboard write failed', err)
+        }
+
+        // Download
+        const link = document.createElement('a')
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        link.download = `3d-view-${timestamp}.png`
+        link.href = finalDataUrl!
+        link.click()
+        results.push('đã tải xuống')
+
+        return 'Thành công: ' + results.join(' & ')
+
+      })(),
+      {
+        loading: 'Đang xử lý ảnh...',
+        success: (msg) => msg,
+        error: (err) => err.message || 'Lỗi chụp ảnh'
+      }
+    )
   }
 
   const getBgClass = () => {
@@ -564,41 +661,93 @@ export const GLBViewer = forwardRef<GLBViewerRef, GLBViewerProps>(({
 
 
 
-      {/* NEW UI: Left Vertical Toolbar (View Interactions) */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 hidden sm:flex">
-        <div className="flex flex-col items-center gap-1 p-1.5 rounded-full bg-background/90 backdrop-blur border shadow-lg">
-          {/* Interaction Mode Toggle */}
+      {/* NEW UI: Left Vertical Toolbar (View Interactions) - Icon + Text for better UX */}
+      <div className={cn(
+        "absolute left-4 top-1/2 -translate-y-1/2 z-30 hidden sm:flex flex-col items-stretch gap-2 transition-all duration-300 ease-in-out",
+        isExpanded ? "w-[140px]" : "w-[52px]" // Fixed width for smooth transition
+      )}>
+        <div className="flex flex-col items-stretch gap-1.5 p-2 rounded-xl bg-background/95 backdrop-blur border shadow-lg overflow-hidden">
+
+          {/* Collapse Toggle */}
+          <div className={cn("flex mb-1", isExpanded ? "justify-end" : "justify-center")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 rounded-full opacity-50 hover:opacity-100"
+              onClick={() => setIsExpanded(!isExpanded)}
+              title={isExpanded ? "Thu gọn" : "Mở rộng"}
+            >
+              {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          {/* Mode Toggle - Rotate vs Pan */}
           <Button
             id="model-interaction-mode"
-            variant={interactionMode === 'pan' ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8 rounded-full"
-            onClick={() => setInteractionMode(prev => prev === 'rotate' ? 'pan' : 'rotate')}
-            title={interactionMode === 'rotate' ? 'Chế độ Xoay (Rotate)' : 'Chế độ Di chuyển (Pan)'}
+            variant={interactionMode === 'rotate' ? "secondary" : "ghost"}
+            size={isExpanded ? "sm" : "icon"}
+            className={cn(
+              "h-9 rounded-lg transition-all duration-300",
+              isExpanded ? "justify-start px-3 gap-2" : "justify-center w-full px-0"
+            )}
+            onClick={() => {
+              setInteractionMode('rotate');
+              if (!isExpanded) toast('Chế độ Xoay', { icon: '🔄', duration: 1500 });
+            }}
+            title="Kéo chuột để xoay mô hình 3D"
           >
-            {interactionMode === 'rotate' ? <Move className="h-4 w-4" /> : <Hand className="h-4 w-4" />}
+            <Hand className="h-4 w-4 shrink-0" />
+            {isExpanded && <span className="text-xs font-medium truncate">Xoay</span>}
           </Button>
+
+          <Button
+            id="model-pan-mode"
+            variant={interactionMode === 'pan' ? "secondary" : "ghost"}
+            size={isExpanded ? "sm" : "icon"}
+            className={cn(
+              "h-9 rounded-lg transition-all duration-300",
+              isExpanded ? "justify-start px-3 gap-2" : "justify-center w-full px-0"
+            )}
+            onClick={() => {
+              setInteractionMode('pan');
+              if (!isExpanded) toast('Chế độ Di chuyển', { icon: '↔️', duration: 1500 });
+            }}
+            title="Kéo chuột để di chuyển mô hình"
+          >
+            <Move className="h-4 w-4 shrink-0" />
+            {isExpanded && <span className="text-xs font-medium truncate">Di chuyển</span>}
+          </Button>
+
+          <div className="h-px bg-border my-1" />
 
           <Button
             id="model-reset-view"
             variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive"
+            size={isExpanded ? "sm" : "icon"}
+            className={cn(
+              "h-9 rounded-lg transition-all duration-300 hover:bg-destructive/10 hover:text-destructive",
+              isExpanded ? "justify-start px-3 gap-2" : "justify-center w-full px-0"
+            )}
             onClick={handleReset}
-            title="Đặt lại góc nhìn"
+            title="Đặt lại góc nhìn về ban đầu"
           >
-            <RefreshCcw className="h-4 w-4" />
+            <RefreshCcw className="h-4 w-4 shrink-0" />
+            {isExpanded && <span className="text-xs font-medium truncate">Đặt lại</span>}
           </Button>
 
           <Button
             id="model-screenshot"
             variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full"
+            size={isExpanded ? "sm" : "icon"}
+            className={cn(
+              "h-9 rounded-lg transition-all duration-300",
+              isExpanded ? "justify-start px-3 gap-2" : "justify-center w-full px-0"
+            )}
             onClick={handleScreenshot}
-            title="Chụp ảnh"
+            title="Chụp ảnh màn hình 3D và tải về"
           >
-            <Camera className="h-4 w-4" />
+            <Camera className="h-4 w-4 shrink-0" />
+            {isExpanded && <span className="text-xs font-medium truncate">Chụp ảnh</span>}
           </Button>
         </div>
       </div>
