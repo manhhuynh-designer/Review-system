@@ -108,7 +108,7 @@ export default function ProjectDetailPage() {
           <p className="text-sm text-muted-foreground mt-1">Trạng thái: {project.status}</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             onClick={() => setShowSubscribers(true)}

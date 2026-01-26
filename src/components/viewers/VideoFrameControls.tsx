@@ -42,16 +42,16 @@ export function VideoFrameControls({
                     onClick={isFrameMode ? onSkipBackward : onFirstMarker}
                     disabled={disabled || (isMarkerMode && !onFirstMarker)}
                     title={isFrameMode ? "Lùi 5 giây (J)" : "Marker đầu tiên"}
-                    className="h-8 sm:h-9 px-2 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
+                    className="h-9 sm:h-9 px-3 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
                 >
                     {isFrameMode ? (
                         <>
-                            <SkipBack className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <SkipBack className="w-4 h-4" />
                             <span className="hidden sm:inline ml-1.5 text-xs font-medium">5s</span>
                         </>
                     ) : (
                         <>
-                            <ChevronsLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <ChevronsLeft className="w-4 h-4" />
                             <span className="hidden sm:inline ml-1.5 text-xs font-medium">First</span>
                         </>
                     )}
@@ -63,9 +63,9 @@ export function VideoFrameControls({
                     onClick={isFrameMode ? onPrevFrame : onPrevMarker}
                     disabled={disabled || (isMarkerMode && !onPrevMarker)}
                     title={isFrameMode ? `Frame trước (1/${currentFps}s)` : "Marker trước"}
-                    className="h-8 sm:h-9 px-2 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
+                    className="h-9 sm:h-9 px-3 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
                 >
-                    <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <ChevronLeft className="w-4 h-4" />
                     <span className="hidden sm:inline ml-1.5 text-xs font-medium">
                         {isFrameMode ? '-1F' : 'Prev'}
                     </span>
@@ -90,12 +90,12 @@ export function VideoFrameControls({
                     onClick={isFrameMode ? onNextFrame : onNextMarker}
                     disabled={disabled || (isMarkerMode && !onNextMarker)}
                     title={isFrameMode ? `Frame tiếp theo (1/${currentFps}s)` : "Marker tiếp theo"}
-                    className="h-8 sm:h-9 px-2 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
+                    className="h-9 sm:h-9 px-3 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
                 >
                     <span className="hidden sm:inline mr-1.5 text-xs font-medium">
                         {isFrameMode ? '+1F' : 'Next'}
                     </span>
-                    <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <ChevronRight className="w-4 h-4" />
                 </Button>
 
                 <Button
@@ -104,7 +104,7 @@ export function VideoFrameControls({
                     onClick={isFrameMode ? onSkipForward : onLastMarker}
                     disabled={disabled || (isMarkerMode && !onLastMarker)}
                     title={isFrameMode ? "Tiến 5 giây (L)" : "Marker cuối cùng"}
-                    className="h-8 sm:h-9 px-2 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
+                    className="h-9 sm:h-9 px-3 sm:px-3 hover:bg-primary/10 hover:border-primary/50 transition-all"
                 >
                     {isFrameMode ? (
                         <>

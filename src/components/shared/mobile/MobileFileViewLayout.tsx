@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { MobileViewToggle } from './MobileViewToggle'
 import { Button } from '@/components/ui/button'
 import {
@@ -136,13 +136,32 @@ export function MobileFileViewLayout({
 
     const uploadDate = current?.uploadedAt?.toDate ? current.uploadedAt.toDate() : new Date()
 
+    // Lock body scroll when mobile view is active
+    useEffect(() => {
+        const originalStyle = document.body.style.overflow
+        const originalPosition = document.body.style.position
+        const originalWidth = document.body.style.width
+
+        // Prevent scrolling on the underlying body
+        document.body.style.overflow = 'hidden'
+        // iOS fix: position fixed ensures no background scrolling
+        document.body.style.position = 'fixed'
+        document.body.style.width = '100%'
+
+        return () => {
+            document.body.style.overflow = originalStyle
+            document.body.style.position = originalPosition
+            document.body.style.width = originalWidth
+        }
+    }, [])
+
     // Handle switching to comments after annotation is done
     const handleSwitchToComments = () => {
         setActiveView('comments')
     }
 
     return (
-        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-background flex flex-col">
             {/* Header - Compact for mobile */}
             <div className="flex items-center justify-between px-3 py-2 border-b bg-background/95 backdrop-blur-lg safe-area-pt">
                 <div className="flex items-center gap-2 flex-1 min-w-0">

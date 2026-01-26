@@ -440,84 +440,101 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .video-controls {
-        padding: 8px 12px 12px;
+        padding: 8px 10px 10px;
     }
 
     .controls-bar {
         gap: 8px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        /* Prevent wrap, we use hiding instead */
+        overflow-x: auto;
+        /* Allow scroll if extremely small */
     }
 
     .controls-left,
     .controls-right {
-        gap: 8px;
+        gap: 6px;
     }
 
     .control-btn {
-        width: 32px;
-        height: 32px;
+        width: 38px;
+        /* Larger touch target */
+        height: 38px;
     }
 
     .control-btn svg {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
     }
 
     .time-display {
         font-size: 11px;
-        min-width: 70px;
+        min-width: 65px;
+        padding: 0 4px;
     }
 
     .speed-select {
-        padding: 4px 8px;
+        padding: 4px 6px;
         font-size: 11px;
+        height: 32px;
+        /* Match button height roughly */
     }
 
-    /* Hide volume slider on mobile to save space - keep button only */
+    /* Hide volume slider container styles handled by JS logic now, but keep this safety */
     .volume-slider-container {
-        display: none;
-    }
-
-    .volume-control:hover .volume-slider-container {
-        display: none;
-    }
-
-    /* Hide export frame on very small screens */
-    @media (max-width: 480px) {
-        .controls-right .control-btn[title="Xuất frame hiện tại"] {
-            display: none;
-        }
+        display: none !important;
     }
 
     .marker-tooltip {
-        min-width: 160px;
-        max-width: 240px;
+        min-width: 140px;
+        max-width: 200px;
         font-size: 11px;
         /* Adjust position to prevent off-screen */
         left: auto;
         right: 0;
         transform: none;
+        bottom: 15px;
+        /* Higher up */
     }
 
     .marker-tooltip::after {
         left: auto;
-        right: 10px;
+        right: 14px;
         transform: none;
     }
 
     .marker-line {
-        width: 2px;
-        height: 16px;
+        width: 3px;
+        /* Thicker for visibility */
+        height: 12px;
     }
 
     .timeline-marker:hover .marker-line {
-        height: 22px;
-        width: 3px;
+        height: 18px;
+        width: 4px;
+    }
+
+    .timeline-track {
+        height: 8px;
+        /* Thicker track for easier seeking */
     }
 
     /* Portrait video on mobile - take more width */
     .custom-video-player.portrait-video video {
         max-width: 100%;
+        object-fit: contain;
+    }
+
+    /* Ensure export button is hidden on very small screens to save space */
+    @media (max-width: 480px) {
+        #video-controls-export {
+            display: none;
+        }
+
+        .time-display {
+            display: none;
+            /* Hide time on very small screens to save space for buttons */
+        }
     }
 }
 

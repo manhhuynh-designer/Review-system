@@ -1,4 +1,5 @@
 import { useState, useRef, lazy, Suspense, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import type { File as FileType } from '@/types'
 import { format } from 'date-fns'
 import { formatFileSize } from '@/lib/utils'
@@ -1562,7 +1563,7 @@ export function FileViewDialogShared({
   return (
     <>
       {/* Mobile Layout - Fullscreen Toggle View */}
-      {isMobile && open && (
+      {isMobile && open && createPortal(
         <MobileFileViewLayout
           file={file}
           current={current}
@@ -1622,7 +1623,8 @@ export function FileViewDialogShared({
           uniqueVersions={uniqueVersions}
           currentVersion={currentVersion}
           onSwitchVersion={onSwitchVersion}
-        />
+        />,
+        document.body
       )}
 
       {/* Desktop Layout - Original Dialog */}

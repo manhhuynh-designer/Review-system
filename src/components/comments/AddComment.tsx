@@ -366,7 +366,7 @@ export function AddComment({
 
                 {/* Action Bar */}
                 <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 -mb-1 max-w-[calc(100%-80px)] scrollbar-hide">
                         <input
                             ref={fileInputRef}
                             type="file"

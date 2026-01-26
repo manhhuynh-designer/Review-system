@@ -10,6 +10,7 @@ import {
     VideoSettingsMenu,
     type CompositionGuide
 } from './overlays'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 export interface CustomVideoPlayerRef {
     exportFrame: () => void
@@ -55,6 +56,8 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
     const [localCurrentTime, setLocalCurrentTime] = useState(0)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [isPortrait, setIsPortrait] = useState(false)
+
+    const isMobile = useIsMobile()
 
     // Enhancement states
     const [showControls, setShowControls] = useState(true)
@@ -647,31 +650,37 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
                             <button onClick={toggleMute} className="control-btn" title={isMuted ? 'Unmute' : 'Mute'}>
                                 {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                             </button>
-                            <div className="volume-slider-container">
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.01"
-                                    value={isMuted ? 0 : volume}
-                                    onChange={handleVolumeChange}
-                                    className="volume-slider"
-                                    title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-                                />
-                            </div>
+                            {!isMobile && (
+                                <div className="volume-slider-container">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.01"
+                                        value={isMuted ? 0 : volume}
+                                        onChange={handleVolumeChange}
+                                        className="volume-slider"
+                                        title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="time-display">
                             {formatTime(localCurrentTime)} / {formatTime(duration)}
                         </div>
 
-                        <button onClick={toggleLoop} className={`control-btn ${isLooping ? 'active' : ''}`} title={isLooping ? 'Tắt lặp (L)' : 'Bật lặp (L)'}>
-                            <Repeat className="w-5 h-5" />
-                        </button>
+                        {!isMobile && (
+                            <>
+                                <button onClick={toggleLoop} className={`control-btn ${isLooping ? 'active' : ''}`} title={isLooping ? 'Tắt lặp (L)' : 'Bật lặp (L)'}>
+                                    <Repeat className="w-5 h-5" />
+                                </button>
 
-                        <button onClick={togglePiP} className="control-btn" title="Picture-in-Picture (P)">
-                            <PictureInPicture2 className="w-5 h-5" />
-                        </button>
+                                <button onClick={togglePiP} className="control-btn" title="Picture-in-Picture (P)">
+                                    <PictureInPicture2 className="w-5 h-5" />
+                                </button>
+                            </>
+                        )}
                     </div>
 
                     <div className="controls-right">
