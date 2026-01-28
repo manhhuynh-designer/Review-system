@@ -63,7 +63,6 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
     const [isLooping, setIsLooping] = useState(false)
     const [hoverTime, setHoverTime] = useState<number | null>(null)
     const [hoverPosition, setHoverPosition] = useState<number>(0)
-    const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     // Overlay state
     const [videoRatio, setVideoRatio] = useState(16 / 9)
@@ -226,70 +225,10 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [duration, togglePlayPause, toggleMute, toggleFullscreen, toggleLoop, togglePiP])
 
-    // Auto-hide controls - only on desktop, disabled on mobile
+    // Controls always visible - auto-hide disabled on all platforms
     useEffect(() => {
-        // On mobile, always show controls - skip auto-hide entirely
-        if (isMobile) {
-            setShowControls(true)
-            return
-        }
-
-        const resetControlsTimeout = () => {
-            setShowControls(true)
-            if (controlsTimeoutRef.current) {
-                clearTimeout(controlsTimeoutRef.current)
-            }
-            // Only auto-hide when video is playing
-            if (isPlaying) {
-                controlsTimeoutRef.current = setTimeout(() => {
-                    setShowControls(false)
-                }, 3000)
-            }
-        }
-
-        const handleMouseLeave = () => {
-            // Only hide on mouse leave if video is playing
-            if (isPlaying) {
-                setShowControls(false)
-            }
-        }
-
-        const container = containerRef.current
-        if (container) {
-            container.addEventListener('mousemove', resetControlsTimeout)
-            container.addEventListener('mouseenter', resetControlsTimeout)
-            container.addEventListener('mouseleave', handleMouseLeave)
-        }
-
-        // Always show controls when video is paused
-        if (!isPlaying) {
-            setShowControls(true)
-            if (controlsTimeoutRef.current) {
-                clearTimeout(controlsTimeoutRef.current)
-            }
-        }
-
-        return () => {
-            if (container) {
-                container.removeEventListener('mousemove', resetControlsTimeout)
-                container.removeEventListener('mouseenter', resetControlsTimeout)
-                container.removeEventListener('mouseleave', handleMouseLeave)
-            }
-            if (controlsTimeoutRef.current) {
-                clearTimeout(controlsTimeoutRef.current)
-            }
-        }
-    }, [isPlaying, isMobile])
-
-    // Show controls when paused
-    useEffect(() => {
-        if (!isPlaying) {
-            setShowControls(true)
-            if (controlsTimeoutRef.current) {
-                clearTimeout(controlsTimeoutRef.current)
-            }
-        }
-    }, [isPlaying])
+        setShowControls(true)
+    }, [])
 
     useEffect(() => {
         const video = videoRef.current
@@ -368,9 +307,16 @@ export const CustomVideoPlayer = memo(forwardRef<CustomVideoPlayerRef, CustomVid
     }, [onTimeUpdate, onLoadedMetadata, onPlay, onPause])
 
     // Seek to external currentTime changes (from frame navigation)
+    // IMPORTANT: Only apply when video is PAUSED to prevent feedback loop stutters
     useEffect(() => {
         const video = videoRef.current
         if (video && currentTime !== undefined && !isNaN(currentTime)) {
+            // Skip if video is playing - let it handle its own time naturally
+            // This prevents the feedback loop: onTimeUpdate -> setCurrentTime -> prop change -> seek -> stutter
+            if (!video.paused) {
+                return
+            }
+
             // If this update was triggered by our own onTimeUpdate, ignore it
             if (isUpdatingTimeRef.current) {
                 isUpdatingTimeRef.current = false
