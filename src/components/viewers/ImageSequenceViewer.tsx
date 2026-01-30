@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
-import { Play, Pause, SkipBack, SkipForward, Repeat, Film, Images, Grid3x3, Edit2, Check, X as XIcon, Maximize2, GripVertical, Trash2, Settings, Plus, Loader2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Repeat, Film, Images, Grid3x3, Edit2, Check, Maximize2, GripVertical, Trash2, Settings, Plus, Loader2 } from 'lucide-react'
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -867,11 +867,21 @@ function GridFrameCard({
 }) {
   const [isEditingCaption, setIsEditingCaption] = useState(false)
   const [editedCaption, setEditedCaption] = useState(caption || '')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (isEditingCaption && textareaRef.current) {
+      textareaRef.current.focus()
+      // adjust height
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+    }
+  }, [isEditingCaption])
 
   const handleSaveCaption = () => {
-    onCaptionChange?.(editedCaption)
-    // Update parent component caption state immediately
-    // This ensures the caption displays in real-time without reload
+    if (editedCaption !== caption) {
+      onCaptionChange?.(editedCaption)
+    }
     setIsEditingCaption(false)
   }
 
@@ -880,9 +890,19 @@ function GridFrameCard({
     setIsEditingCaption(false)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSaveCaption()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      handleCancelEdit()
+    }
+  }
+
   return (
     <div
-      className={`group relative rounded-lg overflow-hidden border-2 transition-all ${isSelected
+      className={`group relative rounded-lg overflow-hidden border-2 transition-all bg-card ${isSelected
         ? 'border-primary ring-2 ring-primary/20 shadow-lg'
         : 'border-border hover:border-primary/50 hover:shadow-md'
         }`}
@@ -909,7 +929,7 @@ function GridFrameCard({
             onViewDetail()
           }}
         >
-          <div className="bg-background/90 text-foreground px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 hover:bg-background transition-colors transform scale-90 group-hover/image:scale-100 transition-transform">
+          <div className="bg-background/90 text-foreground px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 hover:bg-background transition-colors transform scale-90 group-hover/image:scale-100 transition-transform shadow-sm cursor-pointer">
             <Maximize2 className="w-3 h-3" />
             Xem chi tiết
           </div>
@@ -917,56 +937,48 @@ function GridFrameCard({
       </button>
 
       {/* Caption Section */}
-      <div className="p-2 bg-background min-h-[60px]">
+      <div className="min-h-[60px] border-t bg-card">
         {isEditingCaption ? (
-          <div className="space-y-2">
+          <div className="p-2">
             <textarea
+              ref={textareaRef}
               value={editedCaption}
-              onChange={(e) => setEditedCaption(e.target.value)}
-              placeholder="Thêm chú thích..."
-              className="w-full text-xs p-2 bg-background text-foreground placeholder:text-muted-foreground/50 border border-border rounded resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-              rows={2}
+              onChange={(e) => {
+                setEditedCaption(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = e.target.scrollHeight + 'px'
+              }}
+              onKeyDown={handleKeyDown}
+              onBlur={handleSaveCaption}
+              placeholder="Nhập chú thích..."
+              className="w-full text-xs p-2 bg-muted/50 text-foreground placeholder:text-muted-foreground/50 border border-transparent rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background transition-all"
+              rows={1}
               maxLength={500}
-              autoFocus
             />
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                onClick={handleSaveCaption}
-                className="h-6 px-2 text-xs flex-1"
-              >
-                <Check className="w-3 h-3 mr-1" />
-                Lưu
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleCancelEdit}
-                className="h-6 px-2 text-xs flex-1"
-              >
-                <XIcon className="w-3 h-3 mr-1" />
-                Hủy
-              </Button>
+            <div className="flex justify-between items-center mt-1 px-1">
+              <span className="text-[10px] text-muted-foreground">Enter để lưu</span>
+              <span className="text-[10px] text-muted-foreground">{editedCaption.length}/500</span>
             </div>
           </div>
         ) : (
-          <div className="relative group/caption">
+          <div
+            className="relative group/caption p-2 h-full cursor-text"
+            onClick={() => isAdmin && setIsEditingCaption(true)}
+          >
             {caption ? (
-              <div className="text-xs text-muted-foreground break-words whitespace-pre-wrap">
+              <div className="text-xs text-foreground/90 break-words whitespace-pre-wrap line-clamp-3">
                 {linkifyText(caption)}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic">Chưa có chú thích</p>
+              <p className="text-xs text-muted-foreground/50 italic py-1">
+                {isAdmin ? 'Thêm chú thích...' : 'Chưa có chú thích'}
+              </p>
             )}
+
             {isAdmin && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setIsEditingCaption(true)}
-                className="absolute -top-1 -right-1 h-6 w-6 p-0 opacity-0 group-hover/caption:opacity-100 transition-opacity"
-              >
-                <Edit2 className="w-3 h-3" />
-              </Button>
+              <div className="absolute top-1 right-1 opacity-0 group-hover/caption:opacity-100 transition-opacity">
+                <Edit2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+              </div>
             )}
           </div>
         )}
@@ -1025,7 +1037,7 @@ function SortableGridFrameCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative rounded-lg overflow-hidden border-2 transition-all ${isSelectedForDelete
+      className={`group relative rounded-lg overflow-hidden border-2 transition-all bg-card ${isSelectedForDelete
         ? 'border-destructive ring-2 ring-destructive/20 shadow-lg'
         : isSelected
           ? 'border-primary ring-2 ring-primary/20 shadow-lg'
@@ -1036,7 +1048,7 @@ function SortableGridFrameCard({
       <div
         {...attributes}
         {...listeners}
-        className="absolute top-2 right-2 z-20 bg-background/90 backdrop-blur-sm border border-border/50 p-1.5 rounded cursor-grab active:cursor-grabbing hover:bg-muted transition-colors"
+        className="absolute top-2 right-2 z-20 bg-background/90 backdrop-blur-sm border border-border/50 p-1.5 rounded cursor-grab active:cursor-grabbing hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
       >
         <GripVertical className="w-4 h-4 text-muted-foreground" />
       </div>
@@ -1049,30 +1061,30 @@ function SortableGridFrameCard({
         }}
         className={`absolute top-2 left-2 z-20 w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${isSelectedForDelete
           ? 'bg-destructive border-destructive text-destructive-foreground'
-          : 'bg-background/90 border-border hover:border-primary'
+          : 'bg-background/90 border-border hover:border-primary opacity-0 group-hover:opacity-100'
           }`}
       >
         {isSelectedForDelete && <Check className="w-4 h-4" />}
       </button>
 
       {/* Image */}
-      <button
+      <div
         onClick={onSelect}
-        className="w-full aspect-square relative overflow-hidden bg-muted/30 group/image"
+        className="w-full aspect-square relative overflow-hidden bg-muted/30 group/image cursor-pointer"
       >
         <img
           src={url}
           alt={`Frame ${frameNumber + 1}`}
           className="w-full h-full object-contain"
         />
-        <div className="absolute bottom-2 left-2 bg-background/90 backdrop-blur-sm border border-border/50 px-2 py-1 rounded text-xs font-mono">
+        <div className="absolute bottom-2 left-2 bg-background/90 backdrop-blur-sm border border-border/50 px-2 py-1 rounded text-xs font-mono pointer-events-none">
           {String(frameNumber + 1).padStart(3, '0')} / {String(frameCount).padStart(3, '0')}
         </div>
-      </button>
+      </div>
 
       {/* Compact Caption Preview */}
-      <div className="p-2 bg-background">
-        <div className="text-xs text-muted-foreground break-words whitespace-pre-wrap">
+      <div className="p-2 bg-card border-t min-h-[40px]">
+        <div className="text-xs text-muted-foreground break-words whitespace-pre-wrap line-clamp-2">
           {caption ? linkifyText(caption) : <span className="italic text-muted-foreground/50">Chưa có chú thích</span>}
         </div>
       </div>

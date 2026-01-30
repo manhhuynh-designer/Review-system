@@ -9,7 +9,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ArrowUpDown, Calendar, FileType, Download, Search, X, Share2, Check, Mail, Pencil } from 'lucide-react'
+import { ArrowUpDown, Calendar, FileType, Download, Search, X, Share2, Check, Mail, Pencil, Link, Settings, Plus, Upload, ChevronDown } from 'lucide-react'
 import type { Project } from '@/types'
 import { toast } from 'react-hot-toast'
 import { ProjectEditDialog } from '@/components/projects/ProjectEditDialog'
@@ -33,6 +33,8 @@ export default function ProjectDetailPage() {
   const [copied, setCopied] = useState(false)
   const [showSubscribers, setShowSubscribers] = useState(false)
   const [showCreateCanvas, setShowCreateCanvas] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
 
   const handleCopyReviewLink = async () => {
     if (!projectId) return
@@ -111,52 +113,77 @@ export default function ProjectDetailPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            onClick={() => setShowSubscribers(true)}
-            title="Danh sách đăng ký nhận thông báo"
-            className="gap-2"
-          >
-            <Mail className="h-4 w-4" />
-            <span className="hidden sm:inline">Người đăng ký</span>
-            {project.notificationEmails && project.notificationEmails.length > 0 && (
-              <span className="flex items-center justify-center bg-red-500 text-white text-[10px] h-4 px-1 rounded-full min-w-[16px]">
-                {project.notificationEmails.length}
-              </span>
-            )}
-          </Button>
-
           <ProjectEditDialog project={project} />
-          <Button
-            variant="outline"
-            onClick={handleCopyReviewLink}
-            className="gap-2"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4" />
-                <span className="hidden sm:inline">Đã copy!</span>
-              </>
-            ) : (
-              <>
+
+          {/* Share Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
                 <Share2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Share link review</span>
-              </>
-            )}
-          </Button>
+                <span className="hidden sm:inline">Chia sẻ</span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCopyReviewLink}>
+                {copied ? <Check className="h-4 w-4 mr-2" /> : <Link className="h-4 w-4 mr-2" />}
+                Copy link review
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowSubscribers(true)}>
+                <Mail className="h-4 w-4 mr-2" />
+                Người đăng ký
+                {project.notificationEmails && project.notificationEmails.length > 0 && (
+                  <span className="ml-2 flex items-center justify-center bg-red-500 text-white text-[10px] h-4 px-1 rounded-full min-w-[16px]">
+                    {project.notificationEmails.length}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowShareDialog(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Quản lý quyền truy cập
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Create Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Tạo mới</span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowUploadDialog(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Tải tài liệu lên
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowCreateCanvas(true)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Tạo Canvas
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Dialogs */}
           <ProjectShareDialog
             projectId={projectId!}
             resourceName={project.name}
+            open={showShareDialog}
+            onOpenChange={setShowShareDialog}
+            trigger={<span className="hidden" />}
           />
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setShowCreateCanvas(true)}
-          >
-            <Pencil className="h-4 w-4" />
-            <span className="hidden sm:inline">Tạo Canvas</span>
-          </Button>
-          {projectId && <UploadDialog projectId={projectId} />}
+
+          {projectId && (
+            <UploadDialog
+              projectId={projectId}
+              open={showUploadDialog}
+              onOpenChange={setShowUploadDialog}
+              trigger={<span className="hidden" />}
+            />
+          )}
+
           <CreateCanvasDialog
             projectId={projectId!}
             open={showCreateCanvas}

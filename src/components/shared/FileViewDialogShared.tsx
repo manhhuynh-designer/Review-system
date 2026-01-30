@@ -71,6 +71,7 @@ import { useVideoComparison } from '@/hooks/useVideoComparison'
 import toast from 'react-hot-toast'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { MobileFileViewLayout } from './mobile/MobileFileViewLayout'
+import { linkifyText } from '@/lib/linkify'
 
 const GLBViewer = lazy(() => import('@/components/viewers/GLBViewer').then(m => ({ default: m.GLBViewer })))
 const CanvasContainer = lazy(() => import('@/components/canvas/CanvasContainer'))
@@ -267,6 +268,19 @@ export function FileViewDialogShared({
 
   // File store for sequence frame operations
   const { reorderSequenceFrames, deleteSequenceFrames, addSequenceFrames, deleteVersion, uploading } = useFileStore()
+
+  // Optimistic sequence data
+  const [optimisticSequenceData, setOptimisticSequenceData] = useState<{
+    urls: string[]
+    captions?: Record<number, string>
+  } | null>(null)
+
+  // Reset optimistic data when version changes or file changes
+  useEffect(() => {
+    setOptimisticSequenceData(null)
+  }, [file?.id, currentVersion])
+
+
 
   // Video comparison hook
   const videoComparison = useVideoComparison({
@@ -813,6 +827,30 @@ export function FileViewDialogShared({
   // Use local captions if available, otherwise fall back to current version captions
   const effectiveFrameCaptions = localFrameCaptions || current?.frameCaptions
 
+  const handleReorderFrames = async (newOrder: number[]) => {
+    if (!file || !current) return
+    const currentUrls = current.sequenceUrls || []
+    const currentCaptions = effectiveFrameCaptions || {}
+
+    // Calculate new data
+    const newUrls = newOrder.map(i => currentUrls[i])
+    const newCaptions: Record<number, string> = {}
+    newOrder.forEach((oldIndex, newIndex) => {
+      if (currentCaptions[oldIndex]) {
+        newCaptions[newIndex] = currentCaptions[oldIndex]
+      }
+    })
+
+    // Set optimistic state immediately
+    setOptimisticSequenceData({
+      urls: newUrls,
+      captions: newCaptions
+    })
+
+    // Call store action
+    await reorderSequenceFrames(file.projectId, file.id, current.version, newOrder)
+  }
+
   // Update local captions when file/version changes
   useEffect(() => {
     setLocalFrameCaptions(current?.frameCaptions)
@@ -1136,93 +1174,103 @@ export function FileViewDialogShared({
       }
 
       return (
-        <div className="relative bg-muted/20 w-full h-full flex items-center justify-center">
-          {/* Zoom Controls */}
-          <div className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm border border-border/50 rounded-md shadow-sm flex items-center gap-1 p-1">
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}>
-              <span className="font-medium">-</span>
-            </Button>
-            <div className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</div>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom((z) => Math.min(4, z + 0.25))}>
-              <span className="font-medium">+</span>
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { setZoom(1); setPanOffset({ x: 0, y: 0 }) }}>Reset</Button>
+        <div className="flex flex-col w-full h-full bg-muted/20">
+          <div className="relative flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
+            {/* Zoom Controls */}
+            <div className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm border border-border/50 rounded-md shadow-sm flex items-center gap-1 p-1">
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}>
+                <span className="font-medium">-</span>
+              </Button>
+              <div className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</div>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom((z) => Math.min(4, z + 0.25))}>
+                <span className="font-medium">+</span>
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { setZoom(1); setPanOffset({ x: 0, y: 0 }) }}>Reset</Button>
+            </div>
+
+            {/* Scaled content wrapper (image + annotations) */}
+            <div
+              className="origin-center cursor-grab active:cursor-grabbing w-full h-full flex items-center justify-center"
+              ref={(el) => {
+                if (!el) return
+                const pe = (zoom > 1 || isAnnotating) ? 'auto' : 'none'
+                el.style.pointerEvents = pe
+                el.style.transform = `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`
+              }}
+              onMouseDown={(e) => {
+                if (zoom > 1) {
+                  setIsDragging(true)
+                  setLastMousePos({ x: e.clientX, y: e.clientY })
+                  e.preventDefault()
+                }
+              }}
+              onMouseMove={(e) => {
+                if (isDragging && zoom > 1) {
+                  const deltaX = (e.clientX - lastMousePos.x) / zoom
+                  const deltaY = (e.clientY - lastMousePos.y) / zoom
+                  setPanOffset(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }))
+                  setLastMousePos({ x: e.clientX, y: e.clientY })
+                }
+              }}
+              onMouseUp={() => setIsDragging(false)}
+              onMouseLeave={() => setIsDragging(false)}
+            >
+              <img
+                src={effectiveUrl}
+                alt={file.name}
+                className="w-full h-full object-contain"
+              />
+
+              {renderAnnotationOverlay()}
+            </div>
+
+            {/* Sequence Navigation Controls */}
+            {sequenceContext && (
+              <>
+                {/* Frame Counter */}
+                <div className="absolute top-4 left-4 bg-background/90 backdrop-blur-sm border border-border/50 px-3 py-1.5 rounded-md text-sm font-mono pointer-events-none z-10">
+                  Frame {sequenceContext.currentFrameIndex + 1} / {sequenceContext.totalFrames}
+                </div>
+
+                {/* Navigation Buttons */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/60 hover:bg-background/80 backdrop-blur-sm border border-border/50 rounded-full"
+                  onClick={() => sequenceContext.onNavigateFrame?.(Math.max(0, sequenceContext.currentFrameIndex - 1))}
+                  disabled={sequenceContext.currentFrameIndex === 0}
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/60 hover:bg-background/80 backdrop-blur-sm border border-border/50 rounded-full"
+                  onClick={() => sequenceContext.onNavigateFrame?.(Math.min(sequenceContext.totalFrames - 1, sequenceContext.currentFrameIndex + 1))}
+                  disabled={sequenceContext.currentFrameIndex === sequenceContext.totalFrames - 1}
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
+              </>
+            )
+            }
           </div>
 
-          {/* Scaled content wrapper (image + annotations) */}
-          <div
-            className="origin-center cursor-grab active:cursor-grabbing w-full h-full flex items-center justify-center"
-            ref={(el) => {
-              if (!el) return
-              const pe = (zoom > 1 || isAnnotating) ? 'auto' : 'none'
-              el.style.pointerEvents = pe
-              el.style.transform = `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`
-            }}
-            onMouseDown={(e) => {
-              if (zoom > 1) {
-                setIsDragging(true)
-                setLastMousePos({ x: e.clientX, y: e.clientY })
-                e.preventDefault()
-              }
-            }}
-            onMouseMove={(e) => {
-              if (isDragging && zoom > 1) {
-                const deltaX = (e.clientX - lastMousePos.x) / zoom
-                const deltaY = (e.clientY - lastMousePos.y) / zoom
-                setPanOffset(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }))
-                setLastMousePos({ x: e.clientX, y: e.clientY })
-              }
-            }}
-            onMouseUp={() => setIsDragging(false)}
-            onMouseLeave={() => setIsDragging(false)}
-          >
-            <img
-              src={effectiveUrl}
-              alt={file.name}
-              className="w-full h-full object-contain"
-            />
-
-            {renderAnnotationOverlay()}
-          </div>
-
-          {/* Sequence Navigation Controls */}
-          {sequenceContext && (
-            <>
-              {/* Frame Counter */}
-              <div className="absolute top-4 left-4 bg-background/90 backdrop-blur-sm border border-border/50 px-3 py-1.5 rounded-md text-sm font-mono pointer-events-none z-10">
-                Frame {sequenceContext.currentFrameIndex + 1} / {sequenceContext.totalFrames}
+          {/* Caption Display - Separate Block */}
+          {sequenceContext?.frameCaptions?.[sequenceContext.currentFrameIndex] && (
+            <div className="flex-shrink-0 w-full bg-background border-t p-4 min-h-[60px] max-h-[150px] overflow-y-auto z-20 shadow-md">
+              <div className="text-sm text-foreground break-words whitespace-pre-wrap">
+                {linkifyText(sequenceContext.frameCaptions[sequenceContext.currentFrameIndex])}
               </div>
-
-              {/* Navigation Buttons */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/60 hover:bg-background/80 backdrop-blur-sm border border-border/50 rounded-full"
-                onClick={() => sequenceContext.onNavigateFrame?.(Math.max(0, sequenceContext.currentFrameIndex - 1))}
-                disabled={sequenceContext.currentFrameIndex === 0}
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/60 hover:bg-background/80 backdrop-blur-sm border border-border/50 rounded-full"
-                onClick={() => sequenceContext.onNavigateFrame?.(Math.min(sequenceContext.totalFrames - 1, sequenceContext.currentFrameIndex + 1))}
-                disabled={sequenceContext.currentFrameIndex === sequenceContext.totalFrames - 1}
-              >
-                <ChevronRight className="h-6 w-6" />
-              </Button>
-            </>
-          )
-          }
-
-        </div >
+            </div>
+          )}
+        </div>
       )
     }
 
     if (file.type === 'sequence') {
-      const sequenceUrls = current?.sequenceUrls || []
+      const sequenceUrls = optimisticSequenceData?.urls || current?.sequenceUrls || []
       const fps = current?.metadata?.duration && current?.frameCount
         ? Math.round(current.frameCount / current.metadata.duration)
         : 24
@@ -1241,7 +1289,7 @@ export function FileViewDialogShared({
               setSequenceViewMode(mode)
               onSequenceViewModeChange?.(file.id, mode)
             }}
-            frameCaptions={effectiveFrameCaptions}
+            frameCaptions={optimisticSequenceData?.captions || effectiveFrameCaptions}
             onCaptionChange={handleCaptionChangeWithLocalUpdate}
             file={{ id: file.id, currentVersion: current.version }}
             // Annotation props
@@ -1266,9 +1314,7 @@ export function FileViewDialogShared({
             onFrameDetailView={(frame) => {
               setFrameDetailView(frame)
             }}
-            onReorderFrames={async (newOrder) => {
-              await reorderSequenceFrames(file.projectId, file.id, current.version, newOrder)
-            }}
+            onReorderFrames={handleReorderFrames}
             onDeleteFrames={async (indices) => {
               await deleteSequenceFrames(file.projectId, file.id, current.version, indices)
             }}
@@ -1675,6 +1721,17 @@ export function FileViewDialogShared({
                 </div>
                 <div className="min-w-0 flex-1">
                   <DialogTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2 truncate">
+                    {sequenceContext && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 -ml-2 mr-1"
+                        onClick={() => onOpenChange(false)}
+                        title="Quay lại danh sách"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </Button>
+                    )}
                     {isRenaming ? (
                       <div className="flex items-center gap-2 flex-1">
                         <Input

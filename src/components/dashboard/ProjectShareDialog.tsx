@@ -32,6 +32,8 @@ interface ProjectShareDialogProps {
     resourceId?: string
     resourceName?: string
     trigger?: React.ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
 }
 
 export function ProjectShareDialog({
@@ -39,9 +41,15 @@ export function ProjectShareDialog({
     resourceType = 'project',
     resourceId = projectId, // Default to projectId if not provided
     resourceName = 'Project',
-    trigger
+    trigger,
+    open: controlledOpen,
+    onOpenChange: setControlledOpen
 }: ProjectShareDialogProps) {
-    const [open, setOpen] = useState(false)
+    const [internalOpen, setInternalOpen] = useState(false)
+    const isControlled = controlledOpen !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+    const setOpen = isControlled ? setControlledOpen! : setInternalOpen
+
     const [emails, setEmails] = useState('')
     const [isPrivate, setIsPrivate] = useState(false)
     const [sending, setSending] = useState(false)
